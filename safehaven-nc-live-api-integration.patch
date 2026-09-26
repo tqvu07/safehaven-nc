@@ -1,0 +1,1217 @@
+diff --git a/.env.local.example b/.env.local.example
+new file mode 100644
+index 0000000..3c82976
+--- /dev/null
++++ b/.env.local.example
+@@ -0,0 +1,3 @@
++# Base URL of the SafeHaven NC FastAPI backend.
++# Falls back to the production Render URL if unset.
++NEXT_PUBLIC_API_URL=https://safehaven-nc-api.onrender.com
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 4195adb..2c78498 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,4 +1,3 @@
+-import { Analytics } from '@vercel/analytics/next'
+ import type { Metadata, Viewport } from 'next'
+ import { Geist, Geist_Mono } from 'next/font/google'
+ import './globals.css'
+@@ -42,10 +41,7 @@ export default function RootLayout({
+ }>) {
+   return (
+     <html lang="en" className={`${geist.variable} ${geistMono.variable} bg-background`}>
+-      <body className="font-sans antialiased">
+-        {children}
+-        {process.env.NODE_ENV === 'production' && <Analytics />}
+-      </body>
++      <body className="font-sans antialiased">{children}</body>
+     </html>
+   )
+ }
+diff --git a/components/safehaven/dashboard.tsx b/components/safehaven/dashboard.tsx
+index 0da1c50..6ba3633 100644
+--- a/components/safehaven/dashboard.tsx
++++ b/components/safehaven/dashboard.tsx
+@@ -1,9 +1,9 @@
+ 'use client'
+ 
+-import { useState } from 'react'
+-import { Info } from 'lucide-react'
++import { useEffect, useState } from 'react'
++import { AlertTriangle, LoaderCircle } from 'lucide-react'
+ import { DEMO_LOCATIONS, STORM_SCENARIOS } from '@/lib/safehaven/data'
+-import { evaluate, fetchLiveHazard, type Evaluation, type Hazard } from '@/lib/safehaven/risk'
++import { evaluateRisk, ApiError, type ApiEvaluation, type EvaluateRequestBody } from '@/lib/safehaven/api'
+ import { IntakeForm, type IntakeState } from './intake-form'
+ import { Verdict } from './verdict'
+ import { HomeDetails } from './home-details'
+@@ -12,58 +12,63 @@ import { ShelterPanel } from './shelter-panel'
+ const DEFAULT_INTAKE: IntakeState = {
+   coords: DEMO_LOCATIONS[0].coords,
+   locationLabel: DEMO_LOCATIONS[0].label,
+-  structureType: 'single-family',
++  structureType: 'single_family',
+   yearBuilt: 1996,
+   mode: 'scenario',
+   scenarioId: 'cat2',
+ }
+ 
+-function scenarioHazard(id: string): Hazard {
++function scenarioWindMph(id: string): number {
+   const s = STORM_SCENARIOS.find((x) => x.id === id) ?? STORM_SCENARIOS[0]
+-  return { source: 'scenario', label: s.label, windMph: s.windMph, rainIn: s.rainIn, kind: s.kind }
++  return s.windMph
+ }
+ 
+-function runEvaluation(intake: IntakeState, hazard: Hazard) {
+-  return evaluate({
+-    coords: intake.coords,
+-    structureType: intake.structureType,
+-    yearBuilt: Number.isFinite(intake.yearBuilt) ? intake.yearBuilt : 1996,
+-    hazard,
+-  })
++function buildRequestBody(intake: IntakeState): EvaluateRequestBody {
++  return {
++    lat: intake.coords[0],
++    lon: intake.coords[1],
++    year_built: Number.isFinite(intake.yearBuilt) ? intake.yearBuilt : 1996,
++    structure_type: intake.structureType,
++    // null tells the backend to pull the live 72-hour Open-Meteo forecast instead.
++    scenario_wind_mph: intake.mode === 'live' ? null : scenarioWindMph(intake.scenarioId),
++  }
+ }
+ 
+ export function Dashboard() {
+   const [intake, setIntake] = useState<IntakeState>(DEFAULT_INTAKE)
+-  const [evaluatedIntake, setEvaluatedIntake] = useState<IntakeState>(DEFAULT_INTAKE)
+-  const [evaluation, setEvaluation] = useState<Evaluation>(() =>
+-    runEvaluation(DEFAULT_INTAKE, scenarioHazard(DEFAULT_INTAKE.scenarioId)),
+-  )
++  const [evaluatedIntake, setEvaluatedIntake] = useState<IntakeState | null>(null)
++  const [evaluation, setEvaluation] = useState<ApiEvaluation | null>(null)
+   const [submitting, setSubmitting] = useState(false)
+-  const [notice, setNotice] = useState<string | null>(null)
++  const [error, setError] = useState<string | null>(null)
+   const [selectedId, setSelectedId] = useState<string | null>(null)
+ 
+   const handleSubmit = async () => {
+     setSubmitting(true)
+-    setNotice(null)
++    setError(null)
+     const snapshot = intake
+-    let hazard: Hazard
+-    if (snapshot.mode === 'live') {
+-      try {
+-        hazard = await fetchLiveHazard(snapshot.coords)
+-      } catch {
+-        hazard = { ...scenarioHazard('ts'), label: 'Tropical Storm (fallback)' }
+-        setNotice('We couldn’t load the live forecast, so we used a tropical storm instead.')
+-      }
+-    } else {
+-      hazard = scenarioHazard(snapshot.scenarioId)
++    try {
++      const result = await evaluateRisk(buildRequestBody(snapshot))
++      setEvaluation(result)
++      setEvaluatedIntake(snapshot)
++      setSelectedId(null)
++    } catch (err) {
++      setError(
++        err instanceof ApiError
++          ? err.message
++          : 'Something went wrong while checking your home. Please try again.',
++      )
++    } finally {
++      setSubmitting(false)
+     }
+-    setEvaluation(runEvaluation(snapshot, hazard))
+-    setEvaluatedIntake(snapshot)
+-    setSelectedId(null)
+-    setSubmitting(false)
+   }
+ 
+-  const stale = JSON.stringify(intake) !== JSON.stringify(evaluatedIntake)
++  // Run an initial evaluation on load so the dashboard isn't empty.
++  useEffect(() => {
++    handleSubmit()
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [])
++
++  const stale = evaluatedIntake !== null && JSON.stringify(intake) !== JSON.stringify(evaluatedIntake)
+ 
+   return (
+     <div className="mx-auto max-w-6xl py-2 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
+@@ -73,18 +78,38 @@ export function Dashboard() {
+         </aside>
+ 
+         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:gap-6" aria-busy={submitting} aria-live="polite">
+-          {notice && (
+-            <p role="status" className="flex items-center gap-2 border-y border-warning/30 bg-warning/5 px-4 py-3 text-sm sm:rounded-lg sm:border">
+-              <Info className="size-4 shrink-0 text-warning" aria-hidden="true" />
+-              {notice}
++          {error && (
++            <p
++              role="alert"
++              className="flex items-center gap-2 border-y border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive sm:rounded-lg sm:border"
++            >
++              <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
++              {error}
+             </p>
+           )}
+-          <Verdict evaluation={evaluation} />
+-          <ShelterPanel evaluation={evaluation} selectedId={selectedId} onSelect={setSelectedId} />
+-          <HomeDetails evaluation={evaluation} />
++
++          {submitting && !evaluation && (
++            <div
++              role="status"
++              className="flex flex-col items-center justify-center gap-2 border-y border-border bg-card px-4 py-14 text-center text-sm text-muted-foreground sm:rounded-xl sm:border"
++            >
++              <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
++              <span>Checking your home…</span>
++              <span className="text-xs">First request can take up to 30s while the server wakes up.</span>
++            </div>
++          )}
++
++          {evaluation && evaluatedIntake && (
++            <>
++              <Verdict evaluation={evaluation} />
++              <ShelterPanel evaluation={evaluation} userCoords={evaluatedIntake.coords} selectedId={selectedId} onSelect={setSelectedId} />
++              <HomeDetails evaluation={evaluation} intake={evaluatedIntake} />
++            </>
++          )}
++
+           <p className="px-4 py-4 text-xs leading-relaxed text-muted-foreground sm:px-0 sm:py-0">
+-            This is an estimate using sample data for Orange, Durham, and Wake counties. Always follow official
+-            instructions from ReadyNC and your local emergency management office.
++            Estimates use live FEMA BCAT and forecast data for Orange, Durham, and Wake counties. Always follow
++            official instructions from ReadyNC and your local emergency management office.
+           </p>
+         </div>
+       </div>
+diff --git a/components/safehaven/home-details.tsx b/components/safehaven/home-details.tsx
+index 202886a..2f5f64f 100644
+--- a/components/safehaven/home-details.tsx
++++ b/components/safehaven/home-details.tsx
+@@ -1,8 +1,9 @@
+ import { cn } from '@/lib/utils'
+-import { STRUCTURE_TYPES, type ResistanceStatus } from '@/lib/safehaven/data'
+-import type { Evaluation } from '@/lib/safehaven/risk'
++import { STRUCTURE_TYPES } from '@/lib/safehaven/data'
++import type { ApiEvaluation } from '@/lib/safehaven/api'
++import type { IntakeState } from './intake-form'
+ 
+-function CodeStatus({ status }: { status: ResistanceStatus }) {
++function CodeStatus({ status }: { status: string }) {
+   const ok = status === 'Resistant'
+   return (
+     <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium', ok ? 'text-success' : 'text-destructive')}>
+@@ -21,9 +22,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode })
+   )
+ }
+ 
+-export function HomeDetails({ evaluation }: { evaluation: Evaluation }) {
+-  const { county, legacyCode, input } = evaluation
+-  const homeType = STRUCTURE_TYPES.find((s) => s.id === input.structureType)?.label ?? input.structureType
++export function HomeDetails({ evaluation, intake }: { evaluation: ApiEvaluation; intake: IntakeState }) {
++  const homeType = STRUCTURE_TYPES.find((s) => s.id === intake.structureType)?.label ?? intake.structureType
++  const legacy = Number.isFinite(intake.yearBuilt) && intake.yearBuilt < 2000
+ 
+   return (
+     <section aria-labelledby="details-heading" className="border-y border-border bg-card px-4 py-5 sm:rounded-xl sm:border sm:p-5">
+@@ -31,29 +32,25 @@ export function HomeDetails({ evaluation }: { evaluation: Evaluation }) {
+         How we got this
+       </h2>
+       <p className="mt-1 text-sm text-muted-foreground">
+-        Based on your county&apos;s building code and how your home was built.
++        Based on your county&apos;s FEMA BCAT rating and how your home was built.
+       </p>
+ 
+       <div className="mt-4 grid gap-x-8 md:grid-cols-2">
+         <dl className="divide-y divide-border">
+-          <Row label="County">{county.name}</Row>
++          <Row label="County">{evaluation.county_name}</Row>
++          <Row label="County FIPS">{evaluation.county_fips}</Row>
+           <Row label="Home type">{homeType}</Row>
+-          <Row label="Building code">{legacyCode ? 'Pre-2000 (older code)' : 'Modern (2000 or later)'}</Row>
+-          <Row label="County design wind speed">{county.designWindMph} mph</Row>
++          <Row label="Building code">{legacy ? 'Pre-2000 (older code)' : 'Modern (2000 or later)'}</Row>
+         </dl>
+         <dl className="divide-y divide-border">
+           <Row label="Wind code">
+-            <CodeStatus status={county.bcat.wind} />
++            <CodeStatus status={evaluation.bcat_wind_resistance} />
+           </Row>
+           <Row label="Flood code">
+-            <CodeStatus status={county.bcat.flood} />
+-          </Row>
+-          <Row label="Tornado code">
+-            <CodeStatus status={county.bcat.tornado} />
+-          </Row>
+-          <Row label="Past storm damage">
+-            {county.noaaEventCount} events since 2000
++            <CodeStatus status={evaluation.bcat_flood_resistance} />
+           </Row>
++          <Row label="Code edition">{evaluation.building_code_era}</Row>
++          <Row label="Storm wind used">{Math.round(evaluation.storm_wind_mph)} mph</Row>
+         </dl>
+       </div>
+     </section>
+diff --git a/components/safehaven/shelter-map.tsx b/components/safehaven/shelter-map.tsx
+index 83f6189..326c82d 100644
+--- a/components/safehaven/shelter-map.tsx
++++ b/components/safehaven/shelter-map.tsx
+@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react'
+ import L from 'leaflet'
+ import { MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
+ import { HIGH_CAPACITY_THRESHOLD } from '@/lib/safehaven/data'
+-import type { RankedShelter } from '@/lib/safehaven/risk'
++import type { ApiShelter } from '@/lib/safehaven/api'
+ 
+ const PRIMARY = '#1d4ed8'
+ 
+@@ -28,10 +28,10 @@ const homeIcon = L.divIcon({
+   iconAnchor: [9, 9],
+ })
+ 
+-function FitBounds({ user, shelters }: { user: [number, number]; shelters: RankedShelter[] }) {
++function FitBounds({ user, shelters }: { user: [number, number]; shelters: ApiShelter[] }) {
+   const map = useMap()
+   useEffect(() => {
+-    const nearest = shelters.slice(0, 6).map((s) => s.coords)
++    const nearest = shelters.slice(0, 6).map((s) => [s.lat, s.lon] as [number, number])
+     const bounds = L.latLngBounds([user, ...nearest])
+     map.flyToBounds(bounds.pad(0.15), { maxZoom: 13, duration: 0.8 })
+   }, [map, user, shelters])
+@@ -40,7 +40,7 @@ function FitBounds({ user, shelters }: { user: [number, number]; shelters: Ranke
+ 
+ interface ShelterMapProps {
+   user: [number, number]
+-  shelters: RankedShelter[]
++  shelters: ApiShelter[]
+   selectedId: string | null
+   onSelect: (id: string) => void
+ }
+@@ -71,14 +71,14 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
+       </Marker>
+       {shelters.map((s) => {
+         const high = s.capacity >= HIGH_CAPACITY_THRESHOLD
+-        const selected = s.id === selectedId
++        const selected = s.name === selectedId
+         return (
+           <Marker
+-            key={s.id}
+-            position={s.coords}
++            key={s.name}
++            position={[s.lat, s.lon]}
+             icon={high ? (selected ? icons.highSel : icons.high) : selected ? icons.stdSel : icons.std}
+             zIndexOffset={selected ? 900 : 0}
+-            eventHandlers={{ click: () => onSelect(s.id) }}
++            eventHandlers={{ click: () => onSelect(s.name) }}
+             title={s.name}
+             alt={s.name}
+             keyboard
+diff --git a/components/safehaven/shelter-panel.tsx b/components/safehaven/shelter-panel.tsx
+index fa0011a..863af3a 100644
+--- a/components/safehaven/shelter-panel.tsx
++++ b/components/safehaven/shelter-panel.tsx
+@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
+ import { LoaderCircle, Navigation, X } from 'lucide-react'
+ import { cn } from '@/lib/utils'
+ import { HIGH_CAPACITY_THRESHOLD } from '@/lib/safehaven/data'
+-import { directionsUrl, type Evaluation, type RankedShelter } from '@/lib/safehaven/risk'
++import type { ApiEvaluation, ApiShelter } from '@/lib/safehaven/api'
+ 
+ const ShelterMap = dynamic(() => import('./shelter-map'), {
+   ssr: false,
+@@ -16,26 +16,24 @@ const ShelterMap = dynamic(() => import('./shelter-map'), {
+   ),
+ })
+ 
+-function amenities(s: RankedShelter) {
+-  return [s.petFriendly && 'Pets allowed', s.ada && 'Wheelchair accessible', s.generator && 'Backup power']
++function amenities(s: ApiShelter) {
++  return [s.pet_friendly && 'Pets allowed', s.ada_accessible && 'Wheelchair accessible', s.generator && 'Backup power']
+     .filter(Boolean)
+     .join(' · ')
+ }
+ 
+ function DirectionsLink({
+   shelter,
+-  origin,
+   compact,
+   iconOnlyOnMobile,
+ }: {
+-  shelter: RankedShelter
+-  origin: [number, number]
++  shelter: ApiShelter
+   compact?: boolean
+   iconOnlyOnMobile?: boolean
+ }) {
+   return (
+     <a
+-      href={directionsUrl(origin, shelter.coords)}
++      href={shelter.navigation_url}
+       target="_blank"
+       rel="noopener noreferrer"
+       className={cn(
+@@ -51,7 +49,7 @@ function DirectionsLink({
+   )
+ }
+ 
+-function ShelterDetails({ shelter, origin, onClose }: { shelter: RankedShelter; origin: [number, number]; onClose: () => void }) {
++function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: () => void }) {
+   return (
+     <div
+       role="dialog"
+@@ -69,31 +67,33 @@ function ShelterDetails({ shelter, origin, onClose }: { shelter: RankedShelter;
+       <h3 id="shelter-detail-title" className="pr-6 font-semibold">
+         {shelter.name}
+       </h3>
+-      <p className="mt-0.5 text-sm text-muted-foreground">{shelter.address}</p>
++      <p className="mt-0.5 text-sm text-muted-foreground">{shelter.county} County</p>
+       <p className="mt-3 text-sm">
+-        {shelter.construction}, built for winds up to <strong className="font-semibold">{shelter.windRatingMph} mph</strong>
++        Rated for winds up to <strong className="font-semibold">{shelter.max_wind_rating_mph} mph</strong>
+       </p>
+       <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+-        {shelter.distanceMi.toFixed(1)} mi · about {shelter.travelMin} min · room for {shelter.capacity.toLocaleString()}
++        {shelter.distance_miles.toFixed(1)} mi away · room for {shelter.capacity.toLocaleString()}
+       </p>
+       {amenities(shelter) && <p className="mt-1 text-sm text-muted-foreground">{amenities(shelter)}</p>}
+       <div className="mt-3">
+-        <DirectionsLink shelter={shelter} origin={origin} compact />
++        <DirectionsLink shelter={shelter} compact />
+       </div>
+     </div>
+   )
+ }
+ 
+ interface ShelterPanelProps {
+-  evaluation: Evaluation
++  evaluation: ApiEvaluation
++  userCoords: [number, number]
+   selectedId: string | null
+   onSelect: (id: string | null) => void
+ }
+ 
+-export function ShelterPanel({ evaluation, selectedId, onSelect }: ShelterPanelProps) {
+-  const { survivingShelters, filteredOutCount, input, unsafe } = evaluation
+-  const selected = survivingShelters.find((s) => s.id === selectedId) ?? null
+-  const nearest = survivingShelters.slice(0, 5)
++export function ShelterPanel({ evaluation, userCoords, selectedId, onSelect }: ShelterPanelProps) {
++  const shelters = evaluation.survivable_shelters
++  const selected = shelters.find((s) => s.name === selectedId) ?? null
++  const nearest = shelters.slice(0, 5)
++  const unsafe = evaluation.vulnerability_score >= 50
+ 
+   return (
+     <section aria-labelledby="shelters-heading" className="overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border">
+@@ -103,8 +103,7 @@ export function ShelterPanel({ evaluation, selectedId, onSelect }: ShelterPanelP
+             {unsafe ? 'Shelters near you' : 'Shelters near you, if you need one'}
+           </h2>
+           <p className="mt-1 text-sm text-muted-foreground">
+-            {survivingShelters.length} shelters are built to withstand {input.hazard.windMph} mph gusts
+-            {filteredOutCount > 0 && ` · ${filteredOutCount} weaker ones hidden`}
++            {shelters.length} shelter{shelters.length === 1 ? '' : 's'} rated to withstand {Math.round(evaluation.storm_wind_mph)} mph gusts
+           </p>
+         </div>
+         <ul className="flex items-center gap-4 text-xs text-muted-foreground" aria-label="Map legend">
+@@ -124,11 +123,11 @@ export function ShelterPanel({ evaluation, selectedId, onSelect }: ShelterPanelP
+       </div>
+ 
+       <div className="relative h-[320px] border-y sm:h-[380px] border-border lg:h-[440px]">
+-        <ShelterMap user={input.coords} shelters={survivingShelters} selectedId={selectedId} onSelect={(id) => onSelect(id)} />
+-        {selected && <ShelterDetails shelter={selected} origin={input.coords} onClose={() => onSelect(null)} />}
+-        {survivingShelters.length === 0 && (
++        <ShelterMap user={userCoords} shelters={shelters} selectedId={selectedId} onSelect={(id) => onSelect(id)} />
++        {selected && <ShelterDetails shelter={selected} onClose={() => onSelect(null)} />}
++        {shelters.length === 0 && (
+           <div role="alert" className="absolute inset-x-3 top-3 z-[1000] rounded-lg border border-destructive/30 bg-card p-3 text-sm shadow-lg">
+-            <strong className="font-semibold text-destructive">No nearby shelter is rated for {input.hazard.windMph} mph.</strong>{' '}
++            <strong className="font-semibold text-destructive">No nearby shelter is rated for {Math.round(evaluation.storm_wind_mph)} mph.</strong>{' '}
+             Go to a small interior room without windows on the lowest floor.
+           </div>
+         )}
+@@ -138,23 +137,19 @@ export function ShelterPanel({ evaluation, selectedId, onSelect }: ShelterPanelP
+         <ol className="divide-y divide-border" aria-label="Nearest shelters">
+           {nearest.map((s, i) => (
+             <li
+-              key={s.id}
++              key={s.name}
+               className={cn(
+                 'flex items-center gap-3 px-4 py-3.5 transition sm:gap-4 sm:px-5',
+-                s.id === selectedId ? 'bg-accent' : 'hover:bg-muted/50',
++                s.name === selectedId ? 'bg-accent' : 'hover:bg-muted/50',
+               )}
+             >
+               <span className="w-4 shrink-0 self-start pt-0.5 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
+-              <button type="button" onClick={() => onSelect(s.id)} className="min-w-0 flex-1 text-left">
++              <button type="button" onClick={() => onSelect(s.name)} className="min-w-0 flex-1 text-left">
+                 <span className="block font-medium leading-snug text-pretty sm:truncate">{s.name}</span>
+-                <span className="mt-0.5 block text-sm tabular-nums text-muted-foreground">
+-                  {s.distanceMi.toFixed(1)} mi · {s.travelMin} min drive
+-                </span>
+-                {amenities(s) && (
+-                  <span className="mt-0.5 block text-xs text-muted-foreground sm:truncate">{amenities(s)}</span>
+-                )}
++                <span className="mt-0.5 block text-sm tabular-nums text-muted-foreground">{s.distance_miles.toFixed(1)} mi away</span>
++                {amenities(s) && <span className="mt-0.5 block text-xs text-muted-foreground sm:truncate">{amenities(s)}</span>}
+               </button>
+-              <DirectionsLink shelter={s} origin={input.coords} compact iconOnlyOnMobile />
++              <DirectionsLink shelter={s} compact iconOnlyOnMobile />
+             </li>
+           ))}
+         </ol>
+diff --git a/components/safehaven/verdict.tsx b/components/safehaven/verdict.tsx
+index ae14788..16c73f6 100644
+--- a/components/safehaven/verdict.tsx
++++ b/components/safehaven/verdict.tsx
+@@ -1,6 +1,7 @@
+ import { CircleAlert, CircleCheck } from 'lucide-react'
+ import { cn } from '@/lib/utils'
+-import { usd, type Evaluation } from '@/lib/safehaven/risk'
++import { usd } from '@/lib/safehaven/risk'
++import type { ApiEvaluation } from '@/lib/safehaven/api'
+ 
+ function riskLevel(value: number) {
+   if (value >= 50) return { label: 'High', bar: 'bg-destructive', text: 'text-destructive' }
+@@ -18,9 +19,21 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
+   )
+ }
+ 
+-export function Verdict({ evaluation }: { evaluation: Evaluation }) {
+-  const { unsafe, input, homeWindRatingMph, vulnerability, estimatedDamage, homeValue } = evaluation
+-  const risk = riskLevel(vulnerability)
++function ResistanceBadge({ status }: { status: string }) {
++  const ok = status === 'Resistant'
++  return (
++    <span className={cn('inline-flex items-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl', ok ? 'text-success' : 'text-destructive')}>
++      <span className={cn('size-2 rounded-full', ok ? 'bg-success' : 'bg-destructive')} aria-hidden="true" />
++      {status}
++    </span>
++  )
++}
++
++export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
++  const { vulnerability_score, storm_wind_mph, predicted_damage_usd, recommendation, bcat_wind_resistance, building_code_era, county_name } =
++    evaluation
++  const risk = riskLevel(vulnerability_score)
++  const unsafe = vulnerability_score >= 50
+   const Icon = unsafe ? CircleAlert : CircleCheck
+ 
+   return (
+@@ -34,11 +47,7 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
+           <h2 id="verdict-heading" className="text-xl font-semibold tracking-tight text-balance">
+             {unsafe ? 'Leave your home before the storm arrives' : 'Your home should hold up'}
+           </h2>
+-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">
+-            {unsafe
+-              ? `Gusts of ${input.hazard.windMph} mph are stronger than your home is built to handle (about ${homeWindRatingMph} mph). Go to one of the shelters below.`
+-              : `Your home is built for about ${homeWindRatingMph} mph winds, above the ${input.hazard.windMph} mph gusts expected. Stay indoors and away from windows.`}
+-          </p>
++          <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">{recommendation}</p>
+         </div>
+       </div>
+ 
+@@ -47,22 +56,13 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
+           label="Expected gusts"
+           value={
+             <>
+-              {input.hazard.windMph}
+-              <span className="ml-1 text-sm font-normal text-muted-foreground">mph</span>
+-            </>
+-          }
+-          note={`${input.hazard.label} · ${input.hazard.rainIn}" rain`}
+-        />
+-        <Stat
+-          label="Your home is rated for"
+-          value={
+-            <>
+-              {homeWindRatingMph}
++              {Math.round(storm_wind_mph)}
+               <span className="ml-1 text-sm font-normal text-muted-foreground">mph</span>
+             </>
+           }
+-          note={`Built ${input.yearBuilt}`}
++          note={county_name}
+         />
++        <Stat label="County wind code" value={<ResistanceBadge status={bcat_wind_resistance} />} note={building_code_era} />
+         <div className="flex flex-col gap-1 px-3 py-3 sm:p-4">
+           <dt className="text-xs text-muted-foreground sm:text-sm">Damage risk</dt>
+           <dd className={cn('text-xl font-semibold tracking-tight sm:text-2xl', risk.text)}>{risk.label}</dd>
+@@ -71,14 +71,14 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
+             role="meter"
+             aria-valuemin={0}
+             aria-valuemax={100}
+-            aria-valuenow={vulnerability}
+-            aria-label={`Damage risk ${vulnerability}%`}
++            aria-valuenow={vulnerability_score}
++            aria-label={`Damage risk ${vulnerability_score}%`}
+           >
+-            <div className={cn('h-full rounded-full transition-[width] duration-500', risk.bar)} style={{ width: `${vulnerability}%` }} />
++            <div className={cn('h-full rounded-full transition-[width] duration-500', risk.bar)} style={{ width: `${vulnerability_score}%` }} />
+           </div>
+-          <p className="text-xs tabular-nums text-muted-foreground">{vulnerability}% chance of serious damage</p>
++          <p className="text-xs tabular-nums text-muted-foreground">{vulnerability_score}% chance of serious damage</p>
+         </div>
+-        <Stat label="Estimated repairs" value={usd.format(estimatedDamage)} note={`of ${usd.format(homeValue)} home value`} />
++        <Stat label="Estimated repairs" value={usd.format(predicted_damage_usd)} />
+       </dl>
+     </section>
+   )
+diff --git a/lib/safehaven/api.ts b/lib/safehaven/api.ts
+new file mode 100644
+index 0000000..aae34b4
+--- /dev/null
++++ b/lib/safehaven/api.ts
+@@ -0,0 +1,87 @@
++import type { StructureType } from './data'
++
++/** Base URL of the SafeHaven NC FastAPI backend (hosted on Render). */
++export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://safehaven-nc-api.onrender.com'
++
++// Render free-tier instances can cold-start in ~20-30s, so we give the
++// request plenty of room before giving up.
++const REQUEST_TIMEOUT_MS = 45_000
++
++export interface EvaluateRequestBody {
++  lat: number
++  lon: number
++  year_built: number
++  structure_type: StructureType
++  scenario_wind_mph: number | null
++}
++
++export interface ApiShelter {
++  name: string
++  county: string
++  max_wind_rating_mph: number
++  capacity: number
++  pet_friendly: boolean
++  ada_accessible: boolean
++  generator: boolean
++  distance_miles: number
++  lat: number
++  lon: number
++  navigation_url: string
++}
++
++export interface ApiEvaluation {
++  county_name: string
++  county_fips: string
++  bcat_wind_resistance: string
++  bcat_flood_resistance: string
++  building_code_era: string
++  storm_wind_mph: number
++  vulnerability_score: number
++  predicted_damage_usd: number
++  recommendation: string
++  survivable_shelters: ApiShelter[]
++}
++
++export class ApiError extends Error {}
++
++/** POSTs an evaluation request to the live backend and returns the parsed result. */
++export async function evaluateRisk(body: EvaluateRequestBody): Promise<ApiEvaluation> {
++  const controller = new AbortController()
++  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
++
++  let res: Response
++  try {
++    res = await fetch(`${API_BASE_URL}/api/evaluate`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify(body),
++      signal: controller.signal,
++    })
++  } catch (err) {
++    if (err instanceof DOMException && err.name === 'AbortError') {
++      throw new ApiError(
++        'The server is taking too long to respond. It may still be waking up from sleep — please try again in a moment.',
++      )
++    }
++    throw new ApiError('Could not reach the SafeHaven NC server. Check your connection and try again.')
++  } finally {
++    clearTimeout(timeout)
++  }
++
++  if (!res.ok) {
++    let detail = ''
++    try {
++      const errorBody = (await res.json()) as { detail?: unknown }
++      detail = typeof errorBody?.detail === 'string' ? errorBody.detail : ''
++    } catch {
++      // response body wasn't JSON — fall back to the generic message below
++    }
++    throw new ApiError(detail || `The server returned an error (${res.status}). Please try again.`)
++  }
++
++  try {
++    return (await res.json()) as ApiEvaluation
++  } catch {
++    throw new ApiError('Received an unreadable response from the server. Please try again.')
++  }
++}
+diff --git a/lib/safehaven/data.ts b/lib/safehaven/data.ts
+index 6e9a166..90a044c 100644
+--- a/lib/safehaven/data.ts
++++ b/lib/safehaven/data.ts
+@@ -1,59 +1,8 @@
+-export type CountyId = 'orange' | 'durham' | 'wake'
+-
+-export type ResistanceStatus = 'Resistant' | 'Not Resistant'
+-
+-export interface County {
+-  id: CountyId
+-  name: string
+-  fips: string
+-  centroid: [number, number]
+-  bcat: {
+-    wind: ResistanceStatus
+-    flood: ResistanceStatus
+-    tornado: ResistanceStatus
+-  }
+-  designWindMph: number
+-  /** NOAA Storm Events (2000–2026) property-loss calibration multiplier */
+-  noaaLossFactor: number
+-  noaaEventCount: number
+-  medianHomeValue: number
+-}
++// Static UI reference data for the intake form (locations, structure types,
++// storm scenario presets). All risk/shelter data now comes live from the
++// SafeHaven NC FastAPI backend — see lib/safehaven/api.ts.
+ 
+-export const COUNTIES: Record<CountyId, County> = {
+-  orange: {
+-    id: 'orange',
+-    name: 'Orange County',
+-    fips: '37135',
+-    centroid: [36.06, -79.12],
+-    bcat: { wind: 'Not Resistant', flood: 'Resistant', tornado: 'Not Resistant' },
+-    designWindMph: 115,
+-    noaaLossFactor: 0.94,
+-    noaaEventCount: 212,
+-    medianHomeValue: 452000,
+-  },
+-  durham: {
+-    id: 'durham',
+-    name: 'Durham County',
+-    fips: '37063',
+-    centroid: [36.03, -78.88],
+-    bcat: { wind: 'Resistant', flood: 'Not Resistant', tornado: 'Not Resistant' },
+-    designWindMph: 115,
+-    noaaLossFactor: 1.02,
+-    noaaEventCount: 268,
+-    medianHomeValue: 368000,
+-  },
+-  wake: {
+-    id: 'wake',
+-    name: 'Wake County',
+-    fips: '37183',
+-    centroid: [35.79, -78.65],
+-    bcat: { wind: 'Resistant', flood: 'Resistant', tornado: 'Not Resistant' },
+-    designWindMph: 115,
+-    noaaLossFactor: 1.08,
+-    noaaEventCount: 391,
+-    medianHomeValue: 441000,
+-  },
+-}
++export type CountyId = 'orange' | 'durham' | 'wake'
+ 
+ export interface DemoLocation {
+   id: string
+@@ -69,294 +18,28 @@ export const DEMO_LOCATIONS: DemoLocation[] = [
+   { id: 'cary', label: 'Cary Town Center (Wake Co)', coords: [35.7915, -78.7811], county: 'wake' },
+ ]
+ 
+-export type StructureType = 'single-family' | 'multi-family' | 'manufactured'
++// Matches the backend's `structure_type` enum exactly.
++export type StructureType = 'single_family' | 'multi_family' | 'mobile_home'
+ 
+ export const STRUCTURE_TYPES: { id: StructureType; label: string }[] = [
+-  { id: 'single-family', label: 'Single Family Home' },
+-  { id: 'multi-family', label: 'Multi-Family / Apartment' },
+-  { id: 'manufactured', label: 'Manufactured / Mobile Home' },
++  { id: 'single_family', label: 'Single Family Home' },
++  { id: 'multi_family', label: 'Multi-Family / Apartment' },
++  { id: 'mobile_home', label: 'Manufactured / Mobile Home' },
+ ]
+ 
+-export type HazardKind = 'tropical' | 'hurricane' | 'tornado' | 'live'
+-
+ export interface StormScenario {
+   id: string
+   label: string
+   shortLabel: string
++  /** Sent to the backend as `scenario_wind_mph` when this preset is selected. */
+   windMph: number
+-  rainIn: number
+-  kind: HazardKind
+ }
+ 
+ export const STORM_SCENARIOS: StormScenario[] = [
+-  { id: 'ts', label: 'Tropical Storm', shortLabel: '50 mph', windMph: 50, rainIn: 6.5, kind: 'tropical' },
+-  { id: 'cat1', label: 'Cat 1 Hurricane', shortLabel: '80 mph', windMph: 80, rainIn: 8, kind: 'hurricane' },
+-  { id: 'cat2', label: 'Cat 2 Hurricane', shortLabel: '105 mph', windMph: 105, rainIn: 10, kind: 'hurricane' },
+-  { id: 'ef2', label: 'Severe Tornado', shortLabel: 'EF2 · 125 mph', windMph: 125, rainIn: 2, kind: 'tornado' },
+-]
+-
+-export interface Shelter {
+-  id: string
+-  name: string
+-  address: string
+-  county: CountyId
+-  coords: [number, number]
+-  windRatingMph: number
+-  construction: string
+-  capacity: number
+-  petFriendly: boolean
+-  ada: boolean
+-  generator: boolean
+-}
+-
+-export const SHELTERS: Shelter[] = [
+-  {
+-    id: 'dean-smith',
+-    name: 'Dean E. Smith Center',
+-    address: '300 Skipper Bowles Dr, Chapel Hill, NC 27514',
+-    county: 'orange',
+-    coords: [35.8998, -79.0438],
+-    windRatingMph: 150,
+-    construction: 'IBC-Rated Steel Frame',
+-    capacity: 2400,
+-    petFriendly: false,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'chapel-hill-hs',
+-    name: 'Chapel Hill High School',
+-    address: '1709 High School Rd, Chapel Hill, NC 27516',
+-    county: 'orange',
+-    coords: [35.9496, -79.0648],
+-    windRatingMph: 130,
+-    construction: 'Reinforced Masonry (IBC 2012)',
+-    capacity: 650,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'smith-ms',
+-    name: 'Smith Middle School',
+-    address: '9201 Seawell School Rd, Chapel Hill, NC 27516',
+-    county: 'orange',
+-    coords: [35.9395, -79.0725],
+-    windRatingMph: 115,
+-    construction: 'Concrete Block / Steel Joist',
+-    capacity: 420,
+-    petFriendly: false,
+-    ada: true,
+-    generator: false,
+-  },
+-  {
+-    id: 'ch-community-center',
+-    name: 'Chapel Hill Community Center',
+-    address: '120 S Estes Dr, Chapel Hill, NC 27514',
+-    county: 'orange',
+-    coords: [35.9322, -79.0391],
+-    windRatingMph: 100,
+-    construction: 'Wood Truss / Masonry Veneer',
+-    capacity: 220,
+-    petFriendly: true,
+-    ada: true,
+-    generator: false,
+-  },
+-  {
+-    id: 'cedar-ridge-hs',
+-    name: 'Cedar Ridge High School',
+-    address: '1125 New Grady Brown School Rd, Hillsborough, NC 27278',
+-    county: 'orange',
+-    coords: [36.0542, -79.1003],
+-    windRatingMph: 140,
+-    construction: 'Reinforced Masonry (IBC 2015)',
+-    capacity: 800,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'durham-human-services',
+-    name: 'Durham County Human Services Complex',
+-    address: '414 E Main St, Durham, NC 27701',
+-    county: 'durham',
+-    coords: [35.9929, -78.8966],
+-    windRatingMph: 130,
+-    construction: 'Cast-in-Place Concrete Frame',
+-    capacity: 900,
+-    petFriendly: false,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'durham-convention',
+-    name: 'Durham Convention Center',
+-    address: '301 W Morgan St, Durham, NC 27701',
+-    county: 'durham',
+-    coords: [35.996, -78.9031],
+-    windRatingMph: 145,
+-    construction: 'IBC-Rated Steel Frame',
+-    capacity: 1800,
+-    petFriendly: false,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'hillside-hs',
+-    name: 'Hillside High School',
+-    address: '3727 Fayetteville St, Durham, NC 27707',
+-    county: 'durham',
+-    coords: [35.9504, -78.9003],
+-    windRatingMph: 140,
+-    construction: 'Reinforced Masonry (IBC 2009)',
+-    capacity: 750,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'riverside-hs',
+-    name: 'Riverside High School',
+-    address: '3218 Rose of Sharon Rd, Durham, NC 27712',
+-    county: 'durham',
+-    coords: [36.0496, -78.9185],
+-    windRatingMph: 115,
+-    construction: 'Concrete Block / Steel Joist',
+-    capacity: 600,
+-    petFriendly: true,
+-    ada: true,
+-    generator: false,
+-  },
+-  {
+-    id: 'durham-safe-room',
+-    name: 'Durham County Community Safe Room',
+-    address: '2422 Broad St, Durham, NC 27704',
+-    county: 'durham',
+-    coords: [36.0271, -78.9086],
+-    windRatingMph: 250,
+-    construction: 'FEMA P-361 / ICC 500 Safe Room',
+-    capacity: 300,
+-    petFriendly: false,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'raleigh-convention',
+-    name: 'Raleigh Convention Center',
+-    address: '500 S Salisbury St, Raleigh, NC 27601',
+-    county: 'wake',
+-    coords: [35.7743, -78.64],
+-    windRatingMph: 150,
+-    construction: 'IBC-Rated Steel Frame',
+-    capacity: 3000,
+-    petFriendly: false,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'pnc-arena',
+-    name: 'PNC Arena',
+-    address: '1400 Edwards Mill Rd, Raleigh, NC 27607',
+-    county: 'wake',
+-    coords: [35.8033, -78.722],
+-    windRatingMph: 140,
+-    construction: 'IBC-Rated Steel Frame',
+-    capacity: 5000,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'broughton-hs',
+-    name: 'Broughton High School',
+-    address: "723 St Mary's St, Raleigh, NC 27605",
+-    county: 'wake',
+-    coords: [35.7922, -78.6536],
+-    windRatingMph: 110,
+-    construction: 'Legacy Masonry (Retrofitted)',
+-    capacity: 500,
+-    petFriendly: false,
+-    ada: true,
+-    generator: false,
+-  },
+-  {
+-    id: 'enloe-hs',
+-    name: 'Enloe High School',
+-    address: '128 Clarendon Crescent, Raleigh, NC 27610',
+-    county: 'wake',
+-    coords: [35.781, -78.6173],
+-    windRatingMph: 125,
+-    construction: 'Reinforced Masonry (IBC 2006)',
+-    capacity: 700,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'wake-safe-room',
+-    name: 'Wake County Community Safe Room',
+-    address: '4011 Carya Dr, Raleigh, NC 27610',
+-    county: 'wake',
+-    coords: [35.7524, -78.6004],
+-    windRatingMph: 250,
+-    construction: 'FEMA P-361 / ICC 500 Safe Room',
+-    capacity: 400,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'athens-drive-hs',
+-    name: 'Athens Drive High School',
+-    address: '1420 Athens Dr, Raleigh, NC 27606',
+-    county: 'wake',
+-    coords: [35.7547, -78.711],
+-    windRatingMph: 140,
+-    construction: 'Reinforced Masonry (IBC 2015)',
+-    capacity: 850,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'green-hope-hs',
+-    name: 'Green Hope High School',
+-    address: '2500 Carpenter Upchurch Rd, Cary, NC 27519',
+-    county: 'wake',
+-    coords: [35.8154, -78.8763],
+-    windRatingMph: 130,
+-    construction: 'Reinforced Masonry (IBC 2012)',
+-    capacity: 900,
+-    petFriendly: true,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'cary-hs',
+-    name: 'Cary High School',
+-    address: '638 Walnut St, Cary, NC 27511',
+-    county: 'wake',
+-    coords: [35.7753, -78.789],
+-    windRatingMph: 120,
+-    construction: 'Concrete Block / Steel Joist',
+-    capacity: 650,
+-    petFriendly: false,
+-    ada: true,
+-    generator: true,
+-  },
+-  {
+-    id: 'herbert-young',
+-    name: 'Herbert C. Young Community Center',
+-    address: '101 Wilkinson Ave, Cary, NC 27513',
+-    county: 'wake',
+-    coords: [35.7866, -78.7853],
+-    windRatingMph: 95,
+-    construction: 'Wood Truss / Masonry Veneer',
+-    capacity: 180,
+-    petFriendly: true,
+-    ada: true,
+-    generator: false,
+-  },
++  { id: 'ts', label: 'Tropical Storm', shortLabel: '50 mph', windMph: 50 },
++  { id: 'cat1', label: 'Cat 1 Hurricane', shortLabel: '80 mph', windMph: 80 },
++  { id: 'cat2', label: 'Cat 2 Hurricane', shortLabel: '105 mph', windMph: 105 },
++  { id: 'ef2', label: 'Severe Tornado', shortLabel: 'EF2 · 125 mph', windMph: 125 },
+ ]
+ 
+ export const HIGH_CAPACITY_THRESHOLD = 1000
+diff --git a/lib/safehaven/risk.ts b/lib/safehaven/risk.ts
+index 1798b8d..4a23646 100644
+--- a/lib/safehaven/risk.ts
++++ b/lib/safehaven/risk.ts
+@@ -1,164 +1,9 @@
+-import {
+-  COUNTIES,
+-  SHELTERS,
+-  type County,
+-  type CountyId,
+-  type HazardKind,
+-  type Shelter,
+-  type StructureType,
+-} from './data'
+-
+-export interface Hazard {
+-  source: 'live' | 'scenario'
+-  label: string
+-  windMph: number
+-  rainIn: number
+-  kind: HazardKind
+-}
+-
+-export interface EvaluationInput {
+-  coords: [number, number]
+-  structureType: StructureType
+-  yearBuilt: number
+-  hazard: Hazard
+-}
+-
+-export interface RankedShelter extends Shelter {
+-  distanceMi: number
+-  travelMin: number
+-}
+-
+-export interface Evaluation {
+-  input: EvaluationInput
+-  county: County
+-  legacyCode: boolean
+-  homeWindRatingMph: number
+-  vulnerability: number
+-  estimatedDamage: number
+-  homeValue: number
+-  unsafe: boolean
+-  survivingShelters: RankedShelter[]
+-  filteredOutCount: number
+-}
+-
+-const EARTH_RADIUS_MI = 3958.8
+-
+-export function haversineMi([lat1, lon1]: [number, number], [lat2, lon2]: [number, number]) {
+-  const toRad = (d: number) => (d * Math.PI) / 180
+-  const dLat = toRad(lat2 - lat1)
+-  const dLon = toRad(lon2 - lon1)
+-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+-  return 2 * EARTH_RADIUS_MI * Math.asin(Math.sqrt(a))
+-}
+-
+-export function detectCounty(coords: [number, number]): CountyId {
+-  let best: CountyId = 'wake'
+-  let bestDist = Infinity
+-  for (const county of Object.values(COUNTIES)) {
+-    const d = haversineMi(coords, county.centroid)
+-    if (d < bestDist) {
+-      bestDist = d
+-      best = county.id
+-    }
+-  }
+-  return best
+-}
+-
+-/** Approximate 3-second-gust capacity of the building envelope by type and code era. */
+-export function homeWindRating(type: StructureType, yearBuilt: number, county: County) {
+-  let rating: number
+-  if (type === 'manufactured') {
+-    rating = yearBuilt >= 1994 ? 70 : yearBuilt >= 1976 ? 60 : 50
+-  } else {
+-    const modern = yearBuilt >= 2000
+-    const base = type === 'multi-family' ? 5 : 0
+-    rating = (modern ? county.designWindMph : 90) + base
+-    if (yearBuilt >= 2012) rating += 5
+-  }
+-  if (county.bcat.wind === 'Not Resistant') rating -= 5
+-  return rating
+-}
+-
+-const HOME_VALUE_SCALE: Record<StructureType, number> = {
+-  'single-family': 1,
+-  'multi-family': 0.6,
+-  manufactured: 0.22,
+-}
+-
+-export function evaluate(input: EvaluationInput): Evaluation {
+-  const county = COUNTIES[detectCounty(input.coords)]
+-  const legacyCode = input.yearBuilt < 2000
+-  const rating = homeWindRating(input.structureType, input.yearBuilt, county)
+-
+-  const ratio = input.hazard.windMph / rating
+-  let vulnerability = (100 * ratio ** 4) / (1 + ratio ** 4)
+-  if (input.hazard.kind === 'tornado' && county.bcat.tornado === 'Not Resistant') vulnerability += 8
+-  if (input.hazard.rainIn >= 8 && county.bcat.flood === 'Not Resistant') vulnerability += 5
+-  vulnerability = Math.round(Math.min(99, Math.max(1, vulnerability)))
+-
+-  const homeValue = Math.round(county.medianHomeValue * HOME_VALUE_SCALE[input.structureType])
+-  const damageRatio = (vulnerability / 100) ** 1.6
+-  const estimatedDamage = Math.round((homeValue * damageRatio * county.noaaLossFactor) / 100) * 100
+-
+-  const unsafe = vulnerability >= 50 || input.hazard.windMph > rating
+-
+-  const surviving = SHELTERS.filter((s) => s.windRatingMph >= input.hazard.windMph)
+-  const survivingShelters = surviving
+-    .map((s) => {
+-      const distanceMi = haversineMi(input.coords, s.coords)
+-      const roadMi = distanceMi * 1.3
+-      return { ...s, distanceMi, travelMin: Math.max(3, Math.round((roadMi / 28) * 60)) }
+-    })
+-    .sort((a, b) => a.distanceMi - b.distanceMi)
+-
+-  return {
+-    input,
+-    county,
+-    legacyCode,
+-    homeWindRatingMph: rating,
+-    vulnerability,
+-    estimatedDamage,
+-    homeValue,
+-    unsafe,
+-    survivingShelters,
+-    filteredOutCount: SHELTERS.length - surviving.length,
+-  }
+-}
+-
+-export function directionsUrl(origin: [number, number], dest: [number, number]) {
+-  const params = new URLSearchParams({
+-    api: '1',
+-    origin: origin.join(','),
+-    destination: dest.join(','),
+-    travelmode: 'driving',
+-  })
+-  return `https://www.google.com/maps/dir/?${params.toString()}`
+-}
+-
+-export async function fetchLiveHazard(coords: [number, number]): Promise<Hazard> {
+-  const params = new URLSearchParams({
+-    latitude: coords[0].toFixed(4),
+-    longitude: coords[1].toFixed(4),
+-    hourly: 'wind_gusts_10m,precipitation',
+-    wind_speed_unit: 'mph',
+-    precipitation_unit: 'inch',
+-    forecast_days: '3',
+-    timezone: 'America/New_York',
+-  })
+-  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`)
+-  if (!res.ok) throw new Error(`Open-Meteo responded ${res.status}`)
+-  const data = (await res.json()) as {
+-    hourly: { wind_gusts_10m: (number | null)[]; precipitation: (number | null)[] }
+-  }
+-  const gusts = data.hourly.wind_gusts_10m.filter((v): v is number => v != null)
+-  const rain = data.hourly.precipitation.filter((v): v is number => v != null)
+-  return {
+-    source: 'live',
+-    label: 'Live 72-hr Forecast',
+-    windMph: Math.round(Math.max(0, ...gusts)),
+-    rainIn: Math.round(rain.reduce((a, b) => a + b, 0) * 10) / 10,
+-    kind: 'live',
+-  }
+-}
+-
+-export const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
++// Local vulnerability scoring, shelter filtering, and hazard-fetching logic
++// has moved server-side — see lib/safehaven/api.ts for the live backend
++// client. This file now only holds small shared display helpers.
++
++export const usd = new Intl.NumberFormat('en-US', {
++  style: 'currency',
++  currency: 'USD',
++  maximumFractionDigits: 0,
++})
+diff --git a/package.json b/package.json
+index 02c9b69..a2b92b5 100644
+--- a/package.json
++++ b/package.json
+@@ -10,7 +10,6 @@
+   },
+   "dependencies": {
+     "@base-ui/react": "^1.5.0",
+-    "@vercel/analytics": "1.6.1",
+     "class-variance-authority": "^0.7.1",
+     "clsx": "^2.1.1",
+     "leaflet": "^1.9.4",
