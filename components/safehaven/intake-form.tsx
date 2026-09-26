@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { LoaderCircle, LocateFixed } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DEMO_LOCATIONS, STORM_SCENARIOS, STRUCTURE_TYPES, type StructureType } from '@/lib/safehaven/data'
+import { DEMO_LOCATIONS, NC_COUNTY_OPTIONS, STORM_SCENARIOS, STRUCTURE_TYPES, type StructureType } from '@/lib/safehaven/data'
 
 export type ForecastMode = 'live' | 'scenario'
 
@@ -55,6 +55,7 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
   }
 
   const demoId = DEMO_LOCATIONS.find((d) => d.label === value.locationLabel)?.id ?? ''
+  const countyId = NC_COUNTY_OPTIONS.find((c) => c.label === value.locationLabel)?.id ?? ''
   const legacy = Number.isFinite(value.yearBuilt) && value.yearBuilt < 2000
 
   return (
@@ -93,16 +94,26 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
           <select
             id="demo-location"
             className={fieldClass}
-            value={demoId}
+            value={demoId || countyId || ''}
             onChange={(e) => {
               const loc = DEMO_LOCATIONS.find((d) => d.id === e.target.value)
+              const county = NC_COUNTY_OPTIONS.find((c) => c.id === e.target.value)
               if (loc) set({ coords: loc.coords, locationLabel: loc.label })
+              else if (county) set({ coords: county.coords, locationLabel: county.label })
             }}
           >
-            {demoId === '' && <option value="">{value.locationLabel}</option>}
+            {(demoId === '' && countyId === '') && <option value="">{value.locationLabel}</option>}
             {DEMO_LOCATIONS.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.label}
+              </option>
+            ))}
+            <option value="__all_counties__" disabled>
+              All NC counties
+            </option>
+            {NC_COUNTY_OPTIONS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
               </option>
             ))}
           </select>

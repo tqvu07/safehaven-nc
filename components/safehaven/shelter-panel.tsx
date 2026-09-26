@@ -71,6 +71,8 @@ function DirectionsLink({
 }
 
 function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: () => void }) {
+  const ratedTo = Number.isFinite(Number(shelter.max_wind_rating_mph)) ? Number(shelter.max_wind_rating_mph) : 0
+
   return (
     <div
       role="dialog"
@@ -90,7 +92,7 @@ function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: ()
       </h3>
       <p className="mt-0.5 text-sm text-muted-foreground">{shelter.county} County</p>
       <p className="mt-3 text-sm">
-        Rated for winds up to <strong className="font-semibold">{shelter.max_wind_rating_mph} mph</strong>
+        Rated to: <strong className="font-semibold">{ratedTo} mph</strong>
       </p>
       <p className="mt-1 text-sm tabular-nums text-muted-foreground">
         {shelter.distance_miles.toFixed(1)} mi away · room for {shelter.capacity.toLocaleString()}
@@ -176,10 +178,15 @@ export function ShelterPanel({ evaluation, userCoords, selectedId, onSelect }: S
       <div className="relative h-[320px] border-y sm:h-[380px] border-border lg:h-[440px]">
         <ShelterMap user={userCoords} shelters={shelters} selectedId={selectedId} onSelect={(id) => onSelect(id)} />
         {selected && <ShelterDetails shelter={selected} onClose={() => onSelect(null)} />}
-        {shelters.length === 0 && (
+        {shelters.length === 0 && evaluation.storm_wind_mph >= 74 && (
           <div role="alert" className="absolute inset-x-3 top-3 z-[1000] rounded-lg border border-destructive/30 bg-card p-3 text-sm shadow-lg">
             <strong className="font-semibold text-destructive">No nearby shelter is rated for {Math.round(evaluation.storm_wind_mph)} mph.</strong>{' '}
             Go to a small interior room without windows on the lowest floor.
+          </div>
+        )}
+        {shelters.length === 0 && evaluation.storm_wind_mph < 40 && (
+          <div role="status" className="absolute inset-x-3 top-3 z-[1000] rounded-lg border border-border bg-muted/60 p-3 text-sm text-muted-foreground shadow-lg">
+            Current weather presents no threat. Local emergency shelters are on standby.
           </div>
         )}
       </div>
