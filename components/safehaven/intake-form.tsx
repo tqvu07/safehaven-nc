@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CloudRain, LoaderCircle, LocateFixed, MapPin, ShieldCheck, Tornado, Wind } from 'lucide-react'
+import { LoaderCircle, LocateFixed } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DEMO_LOCATIONS, STORM_SCENARIOS, STRUCTURE_TYPES, type StructureType } from '@/lib/safehaven/data'
 
@@ -25,9 +25,9 @@ interface IntakeFormProps {
 }
 
 const fieldClass =
-  'h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/30'
+  'h-10 w-full rounded-md border border-input bg-card px-2.5 text-sm outline-none transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20'
 
-const labelClass = 'mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400'
+const labelClass = 'mb-1.5 block text-sm font-medium'
 
 export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: IntakeFormProps) {
   const [locating, setLocating] = useState(false)
@@ -36,7 +36,7 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
 
   const locate = () => {
     if (!('geolocation' in navigator)) {
-      setGeoError('Geolocation unavailable in this browser.')
+      setGeoError('Your browser doesn’t support location.')
       return
     }
     setLocating(true)
@@ -44,84 +44,83 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false)
-        set({ coords: [pos.coords.latitude, pos.coords.longitude], locationLabel: 'My Location (GPS)' })
+        set({ coords: [pos.coords.latitude, pos.coords.longitude], locationLabel: 'My current location' })
       },
       (err) => {
         setLocating(false)
-        setGeoError(err.code === err.PERMISSION_DENIED ? 'Location permission denied.' : 'Unable to get location.')
+        setGeoError(err.code === err.PERMISSION_DENIED ? 'Location access was blocked.' : 'Couldn’t find your location.')
       },
       { enableHighAccuracy: true, timeout: 10000 },
     )
   }
 
   const demoId = DEMO_LOCATIONS.find((d) => d.label === value.locationLabel)?.id ?? ''
+  const legacy = Number.isFinite(value.yearBuilt) && value.yearBuilt < 2000
 
   return (
-    <section aria-labelledby="intake-heading" className="rounded-xl border border-slate-800 bg-slate-900 p-4 lg:p-5">
-      <h2 id="intake-heading" className="sr-only">
-        Risk intake
+    <section aria-labelledby="intake-heading" className="rounded-xl border border-border bg-card p-5">
+      <h2 id="intake-heading" className="text-base font-semibold">
+        Your home
       </h2>
+      <p className="mt-1 text-sm text-muted-foreground">Tell us where you live and how your home was built.</p>
+
       <form
         onSubmit={(e) => {
           e.preventDefault()
           onSubmit()
         }}
-        className="grid gap-5 lg:grid-cols-12"
+        className="mt-5 flex flex-col gap-5"
       >
-        <fieldset className="flex flex-col gap-3 lg:col-span-3">
-          <legend className={labelClass}>Location</legend>
-          <button
-            type="button"
-            onClick={locate}
-            disabled={locating}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-sky-500/40 bg-sky-500/10 px-3 text-sm font-medium text-sky-300 transition hover:bg-sky-500/20 disabled:opacity-60"
-          >
-            {locating ? (
-              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <LocateFixed className="size-4" aria-hidden="true" />
-            )}
-            Locate My Coordinates
-          </button>
-          <div className="flex items-center gap-2 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-300">
-            <MapPin className="size-3.5 shrink-0 text-sky-400" aria-hidden="true" />
-            <span aria-live="polite">
-              {value.coords[0].toFixed(4)}, {value.coords[1].toFixed(4)}
-            </span>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="demo-location" className="text-sm font-medium">
+              Location
+            </label>
+            <button
+              type="button"
+              onClick={locate}
+              disabled={locating}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline disabled:opacity-60"
+            >
+              {locating ? (
+                <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <LocateFixed className="size-3.5" aria-hidden="true" />
+              )}
+              Use my location
+            </button>
           </div>
-          {geoError && (
-            <p role="alert" className="text-xs text-amber-400">
+          <select
+            id="demo-location"
+            className={fieldClass}
+            value={demoId}
+            onChange={(e) => {
+              const loc = DEMO_LOCATIONS.find((d) => d.id === e.target.value)
+              if (loc) set({ coords: loc.coords, locationLabel: loc.label })
+            }}
+          >
+            {demoId === '' && <option value="">{value.locationLabel}</option>}
+            {DEMO_LOCATIONS.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+          {geoError ? (
+            <p role="alert" className="mt-1.5 text-xs text-destructive">
               {geoError}
             </p>
+          ) : (
+            <p className="mt-1.5 text-xs tabular-nums text-muted-foreground" aria-live="polite">
+              {value.coords[0].toFixed(4)}, {value.coords[1].toFixed(4)}
+            </p>
           )}
-          <div>
-            <label htmlFor="demo-location" className={labelClass}>
-              Demo Quick-Select
-            </label>
-            <select
-              id="demo-location"
-              className={fieldClass}
-              value={demoId}
-              onChange={(e) => {
-                const loc = DEMO_LOCATIONS.find((d) => d.id === e.target.value)
-                if (loc) set({ coords: loc.coords, locationLabel: loc.label })
-              }}
-            >
-              {demoId === '' && <option value="">{value.locationLabel}</option>}
-              {DEMO_LOCATIONS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </fieldset>
+        </div>
 
-        <fieldset className="flex flex-col gap-3 lg:col-span-3">
-          <legend className={labelClass}>Home Structural Profile</legend>
-          <div>
-            <label htmlFor="structure-type" className="mb-1.5 block text-sm text-slate-300">
-              Structure Type
+        <div className="grid grid-cols-[1fr_5rem] gap-3">
+          <div className="min-w-0">
+            <label htmlFor="structure-type" className={labelClass}>
+              Home type
             </label>
             <select
               id="structure-type"
@@ -137,8 +136,8 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
             </select>
           </div>
           <div>
-            <label htmlFor="year-built" className="mb-1.5 block text-sm text-slate-300">
-              Year Built
+            <label htmlFor="year-built" className={labelClass}>
+              Year built
             </label>
             <input
               id="year-built"
@@ -146,25 +145,27 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
               inputMode="numeric"
               min={1900}
               max={2026}
-              className={cn(fieldClass, 'font-mono')}
+              className={cn(fieldClass, 'tabular-nums')}
               value={Number.isFinite(value.yearBuilt) ? value.yearBuilt : ''}
               onChange={(e) => set({ yearBuilt: Number.parseInt(e.target.value, 10) })}
             />
-            <p className={cn('mt-1.5 text-xs', value.yearBuilt < 2000 ? 'text-amber-400' : 'text-emerald-400')}>
-              {value.yearBuilt < 2000 ? 'Pre-2000 legacy code era' : 'Modern IRC continuous load path'}
-            </p>
           </div>
-        </fieldset>
+        </div>
+        {legacy && (
+          <p className="-mt-3 text-xs text-muted-foreground">
+            Homes built before 2000 usually lack hurricane straps, so they&apos;re rated lower.
+          </p>
+        )}
 
-        <fieldset className="flex flex-col gap-3 lg:col-span-4">
-          <legend className={labelClass}>Weather Forecast Mode</legend>
-          <div role="radiogroup" aria-label="Forecast source" className="grid grid-cols-2 gap-1 rounded-md border border-slate-800 bg-slate-950 p-1">
+        <fieldset>
+          <legend className={labelClass}>Storm</legend>
+          <div role="radiogroup" aria-label="Forecast source" className="grid grid-cols-2 rounded-md bg-muted p-1">
             {(
               [
-                { id: 'live', label: 'Live Forecast', sub: 'Open-Meteo / NWS', icon: CloudRain },
-                { id: 'scenario', label: 'Simulated Storm', sub: 'Scenario presets', icon: Wind },
+                { id: 'scenario', label: 'What-if storm' },
+                { id: 'live', label: 'Live forecast' },
               ] as const
-            ).map(({ id, label, sub, icon: Icon }) => {
+            ).map(({ id, label }) => {
               const active = value.mode === id
               return (
                 <button
@@ -174,24 +175,20 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
                   aria-checked={active}
                   onClick={() => set({ mode: id })}
                   className={cn(
-                    'flex items-center gap-2 rounded px-3 py-2 text-left transition',
-                    active ? 'bg-slate-800 text-slate-50' : 'text-slate-400 hover:text-slate-200',
+                    'rounded px-3 py-1.5 text-sm font-medium transition',
+                    active ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <Icon className={cn('size-4 shrink-0', active && 'text-emerald-400')} aria-hidden="true" />
-                  <span className="leading-tight">
-                    <span className="block text-sm font-medium">{label}</span>
-                    <span className="block text-[11px] text-slate-500">{sub}</span>
-                  </span>
+                  {label}
                 </button>
               )
             })}
           </div>
+
           {value.mode === 'scenario' ? (
-            <div role="radiogroup" aria-label="Storm scenario" className="grid grid-cols-2 gap-2">
+            <div role="radiogroup" aria-label="Storm scenario" className="mt-3 flex flex-col gap-1.5">
               {STORM_SCENARIOS.map((s) => {
                 const active = value.scenarioId === s.id
-                const Icon = s.kind === 'tornado' ? Tornado : Wind
                 return (
                   <button
                     key={s.id}
@@ -200,47 +197,49 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
                     aria-checked={active}
                     onClick={() => set({ scenarioId: s.id })}
                     className={cn(
-                      'flex items-center gap-2 rounded-md border px-3 py-2 text-left transition',
-                      active
-                        ? 'border-amber-500/60 bg-amber-500/10 text-amber-200'
-                        : 'border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700',
+                      'flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition',
+                      active ? 'border-primary bg-accent' : 'border-border hover:bg-muted',
                     )}
                   >
-                    <Icon className="size-4 shrink-0" aria-hidden="true" />
-                    <span className="leading-tight">
-                      <span className="block text-sm font-medium">{s.label}</span>
-                      <span className="block font-mono text-[11px] opacity-70">{s.shortLabel}</span>
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className={cn(
+                          'flex size-4 items-center justify-center rounded-full border',
+                          active ? 'border-primary' : 'border-input',
+                        )}
+                        aria-hidden="true"
+                      >
+                        {active && <span className="size-2 rounded-full bg-primary" />}
+                      </span>
+                      <span className="font-medium">{s.label}</span>
                     </span>
+                    <span className="tabular-nums text-muted-foreground">{s.windMph} mph</span>
                   </button>
                 )
               })}
             </div>
           ) : (
-            <p className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm leading-relaxed text-slate-400">
-              Pulls the 72-hour peak wind gust and rainfall total for your coordinates from Open-Meteo (NWS/GFS
-              blended) at evaluation time.
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              We&apos;ll use the strongest wind gust and total rainfall forecast for your location over the next 3
+              days.
             </p>
           )}
         </fieldset>
 
-        <div className="flex flex-col justify-end gap-2 lg:col-span-2">
-          {stale && (
-            <p className="text-xs text-amber-400" aria-live="polite">
-              Inputs changed — re-evaluate to update results.
-            </p>
-          )}
+        <div className="flex flex-col gap-2 border-t border-border pt-5">
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex min-h-24 flex-col items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-4 text-center text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:opacity-70"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:opacity-70"
           >
-            {submitting ? (
-              <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
-            ) : (
-              <ShieldCheck className="size-6" aria-hidden="true" />
-            )}
-            Evaluate Structural Risk &amp; Route Shelters
+            {submitting && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
+            {submitting ? 'Checking…' : 'Check my home'}
           </button>
+          {stale && (
+            <p className="text-center text-xs text-muted-foreground" aria-live="polite">
+              You changed something — check again to update the results.
+            </p>
+          )}
         </div>
       </form>
     </section>

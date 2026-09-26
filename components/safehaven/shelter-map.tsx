@@ -7,16 +7,15 @@ import { MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import { HIGH_CAPACITY_THRESHOLD } from '@/lib/safehaven/data'
 import type { RankedShelter } from '@/lib/safehaven/risk'
 
-const SHIELD_PATH =
-  'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'
+const PRIMARY = '#1d4ed8'
 
-function shieldIcon(highCapacity: boolean, selected: boolean) {
-  const size = highCapacity ? 34 : 26
-  const fill = highCapacity ? '#10b981' : '#0f172a'
-  const stroke = selected ? '#f8fafc' : highCapacity ? '#022c22' : '#10b981'
+function shelterIcon(highCapacity: boolean, selected: boolean) {
+  const size = (highCapacity ? 18 : 14) + (selected ? 6 : 0)
+  const fill = highCapacity ? PRIMARY : '#ffffff'
+  const ring = selected ? `box-shadow:0 0 0 4px rgb(29 78 216 / .25),0 1px 3px rgb(0 0 0 / .3);` : 'box-shadow:0 1px 3px rgb(0 0 0 / .3);'
   return L.divIcon({
     className: 'sh-marker',
-    html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.8}" stroke-linejoin="round" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))"><path d="${SHIELD_PATH}"/><path d="m9 12 2 2 4-4" stroke="${highCapacity ? '#022c22' : '#10b981'}" fill="none"/></svg>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${fill};border:${highCapacity ? '2px solid #fff' : `3px solid ${PRIMARY}`};${ring}"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   })
@@ -24,9 +23,9 @@ function shieldIcon(highCapacity: boolean, selected: boolean) {
 
 const homeIcon = L.divIcon({
   className: 'sh-marker',
-  html: `<div class="sh-home"><span class="sh-radar"></span><span class="sh-radar sh-radar-delay"></span><svg width="30" height="30" viewBox="0 0 24 24" fill="#3b82f6" stroke="#eff6ff" stroke-width="1.8" stroke-linejoin="round"><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
+  html: `<div class="sh-home"><span class="sh-radar"></span></div>`,
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
 })
 
 function FitBounds({ user, shelters }: { user: [number, number]; shelters: RankedShelter[] }) {
@@ -49,20 +48,20 @@ interface ShelterMapProps {
 export default function ShelterMap({ user, shelters, selectedId, onSelect }: ShelterMapProps) {
   const icons = useMemo(
     () => ({
-      high: shieldIcon(true, false),
-      highSel: shieldIcon(true, true),
-      std: shieldIcon(false, false),
-      stdSel: shieldIcon(false, true),
+      high: shelterIcon(true, false),
+      highSel: shelterIcon(true, true),
+      std: shelterIcon(false, false),
+      stdSel: shelterIcon(false, true),
     }),
     [],
   )
 
   return (
-    <MapContainer center={user} zoom={12} scrollWheelZoom className="size-full bg-slate-950" attributionControl>
+    <MapContainer center={user} zoom={12} scrollWheelZoom={false} className="size-full" attributionControl>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        className="sh-dark-tiles"
+        className="sh-tiles"
       />
       <FitBounds user={user} shelters={shelters} />
       <Marker position={user} icon={homeIcon} zIndexOffset={1000}>

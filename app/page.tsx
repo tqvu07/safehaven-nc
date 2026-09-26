@@ -5,7 +5,7 @@ export default function Page() {
   return (
     <>
       <TopNav />
-      <main className="min-h-screen bg-slate-950">
+      <main className="min-h-screen">
         <Dashboard />
       </main>
     </>

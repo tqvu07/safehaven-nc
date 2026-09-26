@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Building, Map as MapIcon, TriangleAlert } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { DEMO_LOCATIONS, STORM_SCENARIOS } from '@/lib/safehaven/data'
 import { evaluate, fetchLiveHazard, type Evaluation, type Hazard } from '@/lib/safehaven/risk'
 import { IntakeForm, type IntakeState } from './intake-form'
-import { CodeScorecard } from './code-scorecard'
-import { VulnerabilityCard } from './vulnerability-card'
+import { Verdict } from './verdict'
+import { HomeDetails } from './home-details'
 import { ShelterPanel } from './shelter-panel'
 
 const DEFAULT_INTAKE: IntakeState = {
@@ -51,8 +51,8 @@ export function Dashboard() {
       try {
         hazard = await fetchLiveHazard(snapshot.coords)
       } catch {
-        hazard = { ...scenarioHazard('ts'), label: 'Fallback (Tropical Storm)' }
-        setNotice('Live forecast unavailable — using Tropical Storm fallback scenario.')
+        hazard = { ...scenarioHazard('ts'), label: 'Tropical Storm (fallback)' }
+        setNotice('We couldn’t load the live forecast, so we used a tropical storm instead.')
       }
     } else {
       hazard = scenarioHazard(snapshot.scenarioId)
@@ -66,39 +66,28 @@ export function Dashboard() {
   const stale = JSON.stringify(intake) !== JSON.stringify(evaluatedIntake)
 
   return (
-    <div className="mx-auto flex max-w-screen-2xl flex-col gap-5 px-4 py-5 lg:px-6">
-      <IntakeForm value={intake} onChange={setIntake} onSubmit={handleSubmit} submitting={submitting} stale={stale} />
+    <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <aside className="lg:sticky lg:top-20 lg:w-80 lg:shrink-0">
+          <IntakeForm value={intake} onChange={setIntake} onSubmit={handleSubmit} submitting={submitting} stale={stale} />
+        </aside>
 
-      {notice && (
-        <p role="status" className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-          {notice}
-        </p>
-      )}
-
-      <div className="grid gap-5 lg:grid-cols-12" aria-busy={submitting}>
-        <section aria-labelledby="code-heading" className="flex flex-col gap-4 lg:col-span-5">
-          <h2 id="code-heading" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
-            <Building className="size-4 text-emerald-400" aria-hidden="true" />
-            County Building Code &amp; Structural Resilience Breakdown
-          </h2>
-          <CodeScorecard evaluation={evaluation} />
-          <VulnerabilityCard evaluation={evaluation} />
-        </section>
-
-        <section aria-labelledby="map-heading" className="flex flex-col gap-4 lg:col-span-7">
-          <h2 id="map-heading" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-300">
-            <MapIcon className="size-4 text-emerald-400" aria-hidden="true" />
-            Adaptive Emergency Shelter Map (Survivability Filtered)
-          </h2>
+        <div className="flex min-w-0 flex-1 flex-col gap-6" aria-busy={submitting} aria-live="polite">
+          {notice && (
+            <p role="status" className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
+              <Info className="size-4 shrink-0 text-warning" aria-hidden="true" />
+              {notice}
+            </p>
+          )}
+          <Verdict evaluation={evaluation} />
           <ShelterPanel evaluation={evaluation} selectedId={selectedId} onSelect={setSelectedId} />
-        </section>
+          <HomeDetails evaluation={evaluation} />
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            This is an estimate using sample data for Orange, Durham, and Wake counties. Always follow official
+            instructions from ReadyNC and your local emergency management office.
+          </p>
+        </div>
       </div>
-
-      <footer className="border-t border-slate-800 pt-4 text-xs leading-relaxed text-slate-500">
-        Demonstration data for Orange, Durham, and Wake counties. Shelter ratings, BCAT attributes, and damage
-        estimates are illustrative — always follow official instructions from ReadyNC and local emergency management.
-      </footer>
     </div>
   )
 }
