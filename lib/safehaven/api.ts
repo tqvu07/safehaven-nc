@@ -22,7 +22,13 @@ export interface ApiWeather {
   precipitation_next_24h_in: number | null
 }
 
-export interface ApiShelter {
+export interface DataSources {
+  county?: string | null
+  building_codes?: string | null
+  shelter_occupancy?: string | null
+}
+
+export interface ShelterResult {
   name: string
   county: string
   max_wind_rating_mph: number
@@ -40,7 +46,7 @@ export interface ApiShelter {
   navigation_url: string
 }
 
-export interface ApiEvaluation {
+export interface EvaluateResponse {
   county_name: string
   county_fips: string
   bcat_wind_resistance: string
@@ -51,8 +57,12 @@ export interface ApiEvaluation {
   predicted_damage_usd: number
   recommendation: string
   weather?: ApiWeather | null
-  survivable_shelters: ApiShelter[]
+  data_sources?: DataSources | null
+  survivable_shelters: ShelterResult[]
 }
+
+export type ApiShelter = ShelterResult
+export type ApiEvaluation = EvaluateResponse
 
 export class ApiError extends Error {}
 

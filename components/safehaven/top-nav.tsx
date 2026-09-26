@@ -8,7 +8,7 @@ export function TopNav() {
           <ShieldCheck className="size-5 text-primary" aria-hidden="true" />
           <h1 className="text-base font-semibold tracking-tight">SafeHaven NC</h1>
           <span className="hidden text-sm text-muted-foreground sm:inline">
-            Storm readiness for Orange, Durham &amp; Wake counties
+            Storm readiness for communities across North Carolina
           </span>
         </div>
         <a

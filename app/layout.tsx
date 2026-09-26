@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 export const metadata: Metadata = {
   title: 'SafeHaven NC | Disaster Resilience & Adaptive Shelter Router',
   description:
-    'Evaluate structural storm risk for Central NC homes against FEMA BCAT building codes and route to survivability-filtered emergency shelters in Orange, Durham, and Wake counties.',
+    'Evaluate structural storm risk for North Carolina homes against FEMA BCAT building codes and route to survivability-filtered emergency shelters across the state.',
   generator: 'v0.app',
   icons: {
     icon: [

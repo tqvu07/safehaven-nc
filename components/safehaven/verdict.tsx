@@ -53,13 +53,22 @@ function ResistanceBadge({ status, stormWindMph }: { status: string; stormWindMp
 }
 
 export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
-  const { vulnerability_score, storm_wind_mph, predicted_damage_usd, recommendation, bcat_wind_resistance, building_code_era, county_name } =
-    evaluation
+  const {
+    vulnerability_score,
+    storm_wind_mph,
+    predicted_damage_usd,
+    recommendation,
+    bcat_wind_resistance,
+    building_code_era,
+    county_name,
+    county_fips,
+  } = evaluation
   const risk = riskLevel(vulnerability_score)
   const unsafe = vulnerability_score >= 50
   const Icon = unsafe ? CircleAlert : CircleCheck
   const weather = evaluation.weather ?? null
   const floodAdvisory = weather?.precipitation_next_24h_in != null && weather.precipitation_next_24h_in >= 2.0
+  const dataSources = evaluation.data_sources ?? null
 
   return (
     <section aria-labelledby="verdict-heading" className="overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border">
@@ -69,9 +78,15 @@ export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
       >
         <Icon className={cn('mt-0.5 size-6 shrink-0', unsafe ? 'text-destructive' : 'text-success')} aria-hidden="true" />
         <div>
-          <h2 id="verdict-heading" className="text-xl font-semibold tracking-tight text-balance">
-            {unsafe ? 'Leave your home before the storm arrives' : 'Your home should hold up'}
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 id="verdict-heading" className="text-xl font-semibold tracking-tight text-balance">
+              {unsafe ? 'Leave your home before the storm arrives' : 'Your home should hold up'}
+            </h2>
+            <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {county_name}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">FIPS: {county_fips}</p>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">{recommendation}</p>
         </div>
       </div>
@@ -125,6 +140,25 @@ export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
         {floodAdvisory && (
           <div className="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
             Inland Flood Threat: Heavy localized rainfall expected.
+          </div>
+        )}
+        {dataSources && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+              title="Verified Official Data: pulled directly from federal GIS services."
+            >
+              Verified Official Data
+            </span>
+            <span className="rounded-full border border-border bg-background px-2 py-1 text-[10px] text-muted-foreground">
+              County: {dataSources.county || 'US Census TIGERweb API'}
+            </span>
+            <span className="rounded-full border border-border bg-background px-2 py-1 text-[10px] text-muted-foreground">
+              Building Codes: {dataSources.building_codes || 'FEMA BCAT Statewide Layer'}
+            </span>
+            <span className="rounded-full border border-border bg-background px-2 py-1 text-[10px] text-muted-foreground">
+              Shelter Occupancy: {dataSources.shelter_occupancy || 'FEMA NSS / Red Cross ESF-6'}
+            </span>
           </div>
         )}
       </div>

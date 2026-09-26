@@ -108,8 +108,8 @@ export function Dashboard() {
           )}
 
           <p className="px-4 py-4 text-xs leading-relaxed text-muted-foreground sm:px-0 sm:py-0">
-            Estimates use live FEMA BCAT and forecast data for Orange, Durham, and Wake counties. Always follow
-            official instructions from ReadyNC and your local emergency management office.
+            Estimates use live FEMA BCAT and forecast data across North Carolina. Always follow official
+            instructions from ReadyNC and your local emergency management office.
           </p>
         </div>
       </div>

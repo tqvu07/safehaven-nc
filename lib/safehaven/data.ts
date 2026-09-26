@@ -2,7 +2,7 @@
 // storm scenario presets). All risk/shelter data now comes live from the
 // SafeHaven NC FastAPI backend — see lib/safehaven/api.ts.
 
-export type CountyId = 'orange' | 'durham' | 'wake'
+export type CountyId = 'orange' | 'durham' | 'wake' | 'mecklenburg' | 'buncombe' | 'new-hanover' | 'guilford'
 
 export interface DemoLocation {
   id: string
@@ -11,11 +11,18 @@ export interface DemoLocation {
   county: CountyId
 }
 
+export const NC_BOUNDS: [[number, number], [number, number]] = [
+  [33.84, -84.32],
+  [36.59, -75.46],
+]
+
 export const DEMO_LOCATIONS: DemoLocation[] = [
   { id: 'chapel-hill', label: 'Chapel Hill (Orange Co)', coords: [35.9132, -79.0558], county: 'orange' },
-  { id: 'durham', label: 'Downtown Durham (Durham Co)', coords: [35.994, -78.8986], county: 'durham' },
   { id: 'raleigh', label: 'Downtown Raleigh (Wake Co)', coords: [35.7796, -78.6382], county: 'wake' },
-  { id: 'cary', label: 'Cary Town Center (Wake Co)', coords: [35.7915, -78.7811], county: 'wake' },
+  { id: 'charlotte', label: 'Charlotte (Mecklenburg Co)', coords: [35.2271, -80.8431], county: 'mecklenburg' },
+  { id: 'asheville', label: 'Asheville (Buncombe Co)', coords: [35.5951, -82.5515], county: 'buncombe' },
+  { id: 'wilmington', label: 'Wilmington (New Hanover Co)', coords: [34.2104, -77.8868], county: 'new-hanover' },
+  { id: 'greensboro', label: 'Greensboro (Guilford Co)', coords: [36.0726, -79.7922], county: 'guilford' },
 ]
 
 // Matches the backend's `structure_type` enum exactly.

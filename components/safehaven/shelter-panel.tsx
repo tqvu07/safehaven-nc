@@ -143,6 +143,8 @@ export function ShelterPanel({ evaluation, userCoords, selectedId, onSelect }: S
   const selected = shelters.find((s) => s.name === selectedId) ?? null
   const nearest = shelters.slice(0, 5)
   const unsafe = evaluation.vulnerability_score >= 50
+  const nearestDistance = shelters.length > 0 ? Math.min(...shelters.map((s) => Number(s.distance_miles ?? 0))) : null
+  const distantAdvisory = nearestDistance !== null && nearestDistance > 25
 
   return (
     <section aria-labelledby="shelters-heading" className="overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border">
@@ -181,6 +183,12 @@ export function ShelterPanel({ evaluation, userCoords, selectedId, onSelect }: S
           </div>
         )}
       </div>
+
+      {distantAdvisory && (
+        <div className="border-t border-border bg-amber-50 px-4 py-2 text-sm text-amber-800 sm:px-5">
+          Regional facility: local municipal evacuation sites may be designated by county emergency management during active events.
+        </div>
+      )}
 
       {nearest.length > 0 && (
         <ol className="divide-y divide-border" aria-label="Nearest shelters">
