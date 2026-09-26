@@ -22,6 +22,27 @@ function amenities(s: ApiShelter) {
     .join(' · ')
 }
 
+function occupancyState(s: ApiShelter) {
+  const capacity = Number(s.evacuation_capacity ?? s.capacity ?? 0)
+  const totalPopulation = Number(s.total_population ?? 0)
+  const remainingCapacity = Number(s.remaining_capacity ?? Math.max(capacity - totalPopulation, 0))
+  const occupancyPercent = capacity > 0 ? Math.round((totalPopulation / capacity) * 100) || 0 : 0
+  const status = (s.shelter_status ?? '').trim().toUpperCase()
+  const isFull = status === 'FULL' || occupancyPercent > 90 || remainingCapacity <= 0
+
+  let tone: 'green' | 'amber' | 'red' = 'green'
+  if (isFull) tone = 'red'
+  else if (occupancyPercent >= 70) tone = 'amber'
+
+  const badgeText = isFull
+    ? 'At Capacity'
+    : remainingCapacity > 0
+      ? `Available Spots: ${remainingCapacity}`
+      : 'No spots left'
+
+  return { capacity, totalPopulation, remainingCapacity, occupancyPercent, status, isFull, tone, badgeText }
+}
+
 function DirectionsLink({
   shelter,
   compact,
@@ -75,6 +96,34 @@ function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: ()
         {shelter.distance_miles.toFixed(1)} mi away · room for {shelter.capacity.toLocaleString()}
       </p>
       {amenities(shelter) && <p className="mt-1 text-sm text-muted-foreground">{amenities(shelter)}</p>}
+      {(() => {
+        const state = occupancyState(shelter)
+        const fillTone =
+          state.tone === 'green' ? 'bg-success' : state.tone === 'amber' ? 'bg-warning' : 'bg-destructive'
+
+        return (
+          <div className="mt-3 rounded-md border border-border bg-muted/30 p-2.5">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-medium text-muted-foreground">Live occupancy</span>
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                  state.isFull ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary',
+                )}
+              >
+                {state.badgeText}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div className={cn('h-full rounded-full transition-all', fillTone)} style={{ width: `${Math.min(state.occupancyPercent, 100)}%` }} />
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Occupancy: {state.totalPopulation} / {state.capacity} ({state.occupancyPercent}% filled)
+            </p>
+            {state.isFull && <p className="mt-1 text-[11px] font-medium text-destructive">At Capacity</p>}
+          </div>
+        )
+      })()}
       <div className="mt-3">
         <DirectionsLink shelter={shelter} compact />
       </div>
@@ -135,23 +184,59 @@ export function ShelterPanel({ evaluation, userCoords, selectedId, onSelect }: S
 
       {nearest.length > 0 && (
         <ol className="divide-y divide-border" aria-label="Nearest shelters">
-          {nearest.map((s, i) => (
-            <li
-              key={s.name}
-              className={cn(
-                'flex items-center gap-3 px-4 py-3.5 transition sm:gap-4 sm:px-5',
-                s.name === selectedId ? 'bg-accent' : 'hover:bg-muted/50',
-              )}
-            >
-              <span className="w-4 shrink-0 self-start pt-0.5 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
-              <button type="button" onClick={() => onSelect(s.name)} className="min-w-0 flex-1 text-left">
-                <span className="block font-medium leading-snug text-pretty sm:truncate">{s.name}</span>
-                <span className="mt-0.5 block text-sm tabular-nums text-muted-foreground">{s.distance_miles.toFixed(1)} mi away</span>
-                {amenities(s) && <span className="mt-0.5 block text-xs text-muted-foreground sm:truncate">{amenities(s)}</span>}
-              </button>
-              <DirectionsLink shelter={s} compact iconOnlyOnMobile />
-            </li>
-          ))}
+          {nearest.map((s, i) => {
+            const state = occupancyState(s)
+            const isDisabled = state.isFull
+
+            return (
+              <li
+                key={s.name}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3.5 transition sm:gap-4 sm:px-5',
+                  s.name === selectedId ? 'bg-accent' : 'hover:bg-muted/50',
+                  isDisabled && 'opacity-80',
+                )}
+              >
+                <span className="w-4 shrink-0 self-start pt-0.5 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => !isDisabled && onSelect(s.name)}
+                  disabled={isDisabled}
+                  className={cn('min-w-0 flex-1 text-left', isDisabled && 'cursor-not-allowed opacity-80')}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="block font-medium leading-snug text-pretty sm:truncate">{s.name}</span>
+                    {isDisabled && (
+                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-destructive">
+                        At Capacity
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-0.5 block text-sm tabular-nums text-muted-foreground">{s.distance_miles.toFixed(1)} mi away</span>
+                  {amenities(s) && <span className="mt-0.5 block text-xs text-muted-foreground sm:truncate">{amenities(s)}</span>}
+                  <div className="mt-2">
+                    <div className="mb-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                      <span>Capacity</span>
+                      <span>{state.badgeText}</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          'h-full rounded-full',
+                          state.tone === 'green' ? 'bg-success' : state.tone === 'amber' ? 'bg-warning' : 'bg-destructive',
+                        )}
+                        style={{ width: `${Math.min(state.occupancyPercent, 100)}%` }}
+                      />
+                    </div>
+                    <span className="mt-1 block text-[10px] text-muted-foreground">
+                      {state.totalPopulation} / {state.capacity} ({state.occupancyPercent}% filled)
+                    </span>
+                  </div>
+                </button>
+                <DirectionsLink shelter={s} compact iconOnlyOnMobile />
+              </li>
+            )
+          })}
         </ol>
       )}
     </section>

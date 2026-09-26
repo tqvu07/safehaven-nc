@@ -16,11 +16,11 @@ function CodeStatus({ status, stormWindMph }: { status: string; stormWindMph: nu
       : 'Active storm vulnerability: structural risk during the current event.'
 
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-start gap-1" title="FEMA structural resistance rating for severe hurricane loads.">
       <span
         className={cn(
           'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium',
-          calm ? 'border-border bg-muted/70 text-slate-700' : alert ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-success/20 bg-success/10 text-success',
+          calm ? 'border-slate-200 bg-slate-100 text-slate-700' : alert ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-success/20 bg-success/10 text-success',
         )}
       >
         <span className={cn('size-1.5 rounded-full', calm ? 'bg-slate-500' : alert ? 'bg-amber-500' : 'bg-success')} aria-hidden="true" />

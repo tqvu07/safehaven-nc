@@ -15,11 +15,22 @@ export interface EvaluateRequestBody {
   scenario_wind_mph: number | null
 }
 
+export interface ApiWeather {
+  current_temp_f: number | null
+  wind_speed_mph: number | null
+  wind_gusts_mph: number | null
+  precipitation_next_24h_in: number | null
+}
+
 export interface ApiShelter {
   name: string
   county: string
   max_wind_rating_mph: number
   capacity: number
+  total_population?: number | null
+  evacuation_capacity?: number | null
+  remaining_capacity?: number | null
+  shelter_status?: string | null
   pet_friendly: boolean
   ada_accessible: boolean
   generator: boolean
@@ -39,6 +50,7 @@ export interface ApiEvaluation {
   vulnerability_score: number
   predicted_damage_usd: number
   recommendation: string
+  weather?: ApiWeather | null
   survivable_shelters: ApiShelter[]
 }
 

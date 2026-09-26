@@ -32,11 +32,11 @@ function ResistanceBadge({ status, stormWindMph }: { status: string; stormWindMp
       : 'Structural vulnerability during active storm conditions.'
 
   return (
-    <div className="flex flex-col items-start gap-1.5">
+    <div className="flex flex-col items-start gap-1.5" title="FEMA structural resistance rating for severe hurricane loads.">
       <span
         className={cn(
           'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-semibold tracking-tight sm:text-lg',
-          calm ? 'border-border bg-muted/70 text-slate-700' : alert ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-success/20 bg-success/10 text-success',
+          calm ? 'border-slate-200 bg-slate-100 text-slate-700' : alert ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-success/20 bg-success/10 text-success',
         )}
       >
         <span className={cn('size-2 rounded-full', calm ? 'bg-slate-500' : alert ? 'bg-amber-500' : 'bg-success')} aria-hidden="true" />
@@ -58,6 +58,8 @@ export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
   const risk = riskLevel(vulnerability_score)
   const unsafe = vulnerability_score >= 50
   const Icon = unsafe ? CircleAlert : CircleCheck
+  const weather = evaluation.weather ?? null
+  const floodAdvisory = weather?.precipitation_next_24h_in != null && weather.precipitation_next_24h_in >= 2.0
 
   return (
     <section aria-labelledby="verdict-heading" className="overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border">
@@ -107,6 +109,25 @@ export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
         </div>
         <Stat label="Estimated repairs" value={usd.format(predicted_damage_usd)} />
       </dl>
+
+      <div className="border-t border-border bg-muted/30 px-3 py-2.5 sm:px-4">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="rounded-md border border-border bg-background px-2 py-1 font-medium text-foreground">
+            {weather?.current_temp_f != null ? `Temp: ${weather.current_temp_f}°F` : 'Temp: n/a'}
+          </span>
+          <span className="rounded-md border border-border bg-background px-2 py-1 font-medium text-foreground">
+            {weather?.wind_gusts_mph != null ? `Peak 24h Wind Gust: ${weather.wind_gusts_mph} mph` : 'Peak 24h Wind Gust: n/a'}
+          </span>
+          <span className="rounded-md border border-border bg-background px-2 py-1 font-medium text-foreground">
+            {weather?.precipitation_next_24h_in != null ? `24h Rainfall: ${weather.precipitation_next_24h_in} in` : '24h Rainfall: n/a'}
+          </span>
+        </div>
+        {floodAdvisory && (
+          <div className="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
+            Inland Flood Threat: Heavy localized rainfall expected.
+          </div>
+        )}
+      </div>
     </section>
   )
 }

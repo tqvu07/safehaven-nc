@@ -9,13 +9,14 @@ import type { ApiShelter } from '@/lib/safehaven/api'
 
 const PRIMARY = '#1d4ed8'
 
-function shelterIcon(highCapacity: boolean, selected: boolean) {
+function shelterIcon(highCapacity: boolean, selected: boolean, status: 'green' | 'amber' | 'red' = 'green') {
   const size = (highCapacity ? 18 : 14) + (selected ? 6 : 0)
-  const fill = highCapacity ? PRIMARY : '#ffffff'
+  const fill = status === 'red' ? '#dc2626' : status === 'amber' ? '#f59e0b' : highCapacity ? PRIMARY : '#ffffff'
+  const border = status === 'red' ? '#7f1d1d' : status === 'amber' ? '#92400e' : highCapacity ? '#ffffff' : PRIMARY
   const ring = selected ? `box-shadow:0 0 0 4px rgb(29 78 216 / .25),0 1px 3px rgb(0 0 0 / .3);` : 'box-shadow:0 1px 3px rgb(0 0 0 / .3);'
   return L.divIcon({
     className: 'sh-marker',
-    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${fill};border:${highCapacity ? '2px solid #fff' : `3px solid ${PRIMARY}`};${ring}"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${fill};border:${highCapacity ? '2px solid #fff' : `3px solid ${border}`};${ring}"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   })
@@ -72,19 +73,25 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
       {shelters.map((s) => {
         const high = s.capacity >= HIGH_CAPACITY_THRESHOLD
         const selected = s.name === selectedId
+        const capacity = Number(s.evacuation_capacity ?? s.capacity ?? 0)
+        const totalPopulation = Number(s.total_population ?? 0)
+        const occupancy = capacity > 0 ? Math.round((totalPopulation / capacity) * 100) || 0 : 0
+        const status = (s.shelter_status ?? '').trim().toUpperCase()
+        const markerStatus = status === 'FULL' || occupancy > 90 ? 'red' : occupancy >= 70 ? 'amber' : 'green'
         return (
           <Marker
             key={s.name}
             position={[s.lat, s.lon]}
-            icon={high ? (selected ? icons.highSel : icons.high) : selected ? icons.stdSel : icons.std}
+            icon={high ? (selected ? shelterIcon(true, true, markerStatus) : shelterIcon(true, false, markerStatus)) : selected ? shelterIcon(false, true, markerStatus) : shelterIcon(false, false, markerStatus)}
             zIndexOffset={selected ? 900 : 0}
-            eventHandlers={{ click: () => onSelect(s.name) }}
+            eventHandlers={{ click: () => !(status === 'FULL' || occupancy > 90) && onSelect(s.name) }}
             title={s.name}
             alt={s.name}
             keyboard
           >
             <Tooltip direction="top" offset={[0, -14]}>
               {s.name}
+              {status === 'FULL' ? ' · At Capacity' : ''}
             </Tooltip>
           </Marker>
         )
