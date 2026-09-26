@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react'
 import L from 'leaflet'
 import { MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import { HIGH_CAPACITY_THRESHOLD } from '@/lib/safehaven/data'
-import type { RankedShelter } from '@/lib/safehaven/risk'
+import type { ApiShelter } from '@/lib/safehaven/api'
 
 const PRIMARY = '#1d4ed8'
 
@@ -28,10 +28,10 @@ const homeIcon = L.divIcon({
   iconAnchor: [9, 9],
 })
 
-function FitBounds({ user, shelters }: { user: [number, number]; shelters: RankedShelter[] }) {
+function FitBounds({ user, shelters }: { user: [number, number]; shelters: ApiShelter[] }) {
   const map = useMap()
   useEffect(() => {
-    const nearest = shelters.slice(0, 6).map((s) => s.coords)
+    const nearest = shelters.slice(0, 6).map((s) => [s.lat, s.lon] as [number, number])
     const bounds = L.latLngBounds([user, ...nearest])
     map.flyToBounds(bounds.pad(0.15), { maxZoom: 13, duration: 0.8 })
   }, [map, user, shelters])
@@ -40,7 +40,7 @@ function FitBounds({ user, shelters }: { user: [number, number]; shelters: Ranke
 
 interface ShelterMapProps {
   user: [number, number]
-  shelters: RankedShelter[]
+  shelters: ApiShelter[]
   selectedId: string | null
   onSelect: (id: string) => void
 }
@@ -71,14 +71,14 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
       </Marker>
       {shelters.map((s) => {
         const high = s.capacity >= HIGH_CAPACITY_THRESHOLD
-        const selected = s.id === selectedId
+        const selected = s.name === selectedId
         return (
           <Marker
-            key={s.id}
-            position={s.coords}
+            key={s.name}
+            position={[s.lat, s.lon]}
             icon={high ? (selected ? icons.highSel : icons.high) : selected ? icons.stdSel : icons.std}
             zIndexOffset={selected ? 900 : 0}
-            eventHandlers={{ click: () => onSelect(s.id) }}
+            eventHandlers={{ click: () => onSelect(s.name) }}
             title={s.name}
             alt={s.name}
             keyboard

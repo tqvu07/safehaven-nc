@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { usd, type Evaluation } from '@/lib/safehaven/risk'
+import { usd } from '@/lib/safehaven/risk'
+import type { ApiEvaluation } from '@/lib/safehaven/api'
 
 function riskLevel(value: number) {
   if (value >= 50) return { label: 'High', bar: 'bg-destructive', text: 'text-destructive' }
@@ -18,9 +19,21 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
   )
 }
 
-export function Verdict({ evaluation }: { evaluation: Evaluation }) {
-  const { unsafe, input, homeWindRatingMph, vulnerability, estimatedDamage, homeValue } = evaluation
-  const risk = riskLevel(vulnerability)
+function ResistanceBadge({ status }: { status: string }) {
+  const ok = status === 'Resistant'
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl', ok ? 'text-success' : 'text-destructive')}>
+      <span className={cn('size-2 rounded-full', ok ? 'bg-success' : 'bg-destructive')} aria-hidden="true" />
+      {status}
+    </span>
+  )
+}
+
+export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
+  const { vulnerability_score, storm_wind_mph, predicted_damage_usd, recommendation, bcat_wind_resistance, building_code_era, county_name } =
+    evaluation
+  const risk = riskLevel(vulnerability_score)
+  const unsafe = vulnerability_score >= 50
   const Icon = unsafe ? CircleAlert : CircleCheck
 
   return (
@@ -34,11 +47,7 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
           <h2 id="verdict-heading" className="text-xl font-semibold tracking-tight text-balance">
             {unsafe ? 'Leave your home before the storm arrives' : 'Your home should hold up'}
           </h2>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">
-            {unsafe
-              ? `Gusts of ${input.hazard.windMph} mph are stronger than your home is built to handle (about ${homeWindRatingMph} mph). Go to one of the shelters below.`
-              : `Your home is built for about ${homeWindRatingMph} mph winds, above the ${input.hazard.windMph} mph gusts expected. Stay indoors and away from windows.`}
-          </p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">{recommendation}</p>
         </div>
       </div>
 
@@ -47,22 +56,13 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
           label="Expected gusts"
           value={
             <>
-              {input.hazard.windMph}
+              {Math.round(storm_wind_mph)}
               <span className="ml-1 text-sm font-normal text-muted-foreground">mph</span>
             </>
           }
-          note={`${input.hazard.label} · ${input.hazard.rainIn}" rain`}
+          note={county_name}
         />
-        <Stat
-          label="Your home is rated for"
-          value={
-            <>
-              {homeWindRatingMph}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">mph</span>
-            </>
-          }
-          note={`Built ${input.yearBuilt}`}
-        />
+        <Stat label="County wind code" value={<ResistanceBadge status={bcat_wind_resistance} />} note={building_code_era} />
         <div className="flex flex-col gap-1 px-3 py-3 sm:p-4">
           <dt className="text-xs text-muted-foreground sm:text-sm">Damage risk</dt>
           <dd className={cn('text-xl font-semibold tracking-tight sm:text-2xl', risk.text)}>{risk.label}</dd>
@@ -71,14 +71,14 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
             role="meter"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={vulnerability}
-            aria-label={`Damage risk ${vulnerability}%`}
+            aria-valuenow={vulnerability_score}
+            aria-label={`Damage risk ${vulnerability_score}%`}
           >
-            <div className={cn('h-full rounded-full transition-[width] duration-500', risk.bar)} style={{ width: `${vulnerability}%` }} />
+            <div className={cn('h-full rounded-full transition-[width] duration-500', risk.bar)} style={{ width: `${vulnerability_score}%` }} />
           </div>
-          <p className="text-xs tabular-nums text-muted-foreground">{vulnerability}% chance of serious damage</p>
+          <p className="text-xs tabular-nums text-muted-foreground">{vulnerability_score}% chance of serious damage</p>
         </div>
-        <Stat label="Estimated repairs" value={usd.format(estimatedDamage)} note={`of ${usd.format(homeValue)} home value`} />
+        <Stat label="Estimated repairs" value={usd.format(predicted_damage_usd)} />
       </dl>
     </section>
   )

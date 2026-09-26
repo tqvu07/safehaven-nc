@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils'
-import { STRUCTURE_TYPES, type ResistanceStatus } from '@/lib/safehaven/data'
-import type { Evaluation } from '@/lib/safehaven/risk'
+import { STRUCTURE_TYPES } from '@/lib/safehaven/data'
+import type { ApiEvaluation } from '@/lib/safehaven/api'
+import type { IntakeState } from './intake-form'
 
-function CodeStatus({ status }: { status: ResistanceStatus }) {
+function CodeStatus({ status }: { status: string }) {
   const ok = status === 'Resistant'
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium', ok ? 'text-success' : 'text-destructive')}>
@@ -21,9 +22,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-export function HomeDetails({ evaluation }: { evaluation: Evaluation }) {
-  const { county, legacyCode, input } = evaluation
-  const homeType = STRUCTURE_TYPES.find((s) => s.id === input.structureType)?.label ?? input.structureType
+export function HomeDetails({ evaluation, intake }: { evaluation: ApiEvaluation; intake: IntakeState }) {
+  const homeType = STRUCTURE_TYPES.find((s) => s.id === intake.structureType)?.label ?? intake.structureType
+  const legacy = Number.isFinite(intake.yearBuilt) && intake.yearBuilt < 2000
 
   return (
     <section aria-labelledby="details-heading" className="border-y border-border bg-card px-4 py-5 sm:rounded-xl sm:border sm:p-5">
@@ -31,29 +32,25 @@ export function HomeDetails({ evaluation }: { evaluation: Evaluation }) {
         How we got this
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Based on your county&apos;s building code and how your home was built.
+        Based on your county&apos;s FEMA BCAT rating and how your home was built.
       </p>
 
       <div className="mt-4 grid gap-x-8 md:grid-cols-2">
         <dl className="divide-y divide-border">
-          <Row label="County">{county.name}</Row>
+          <Row label="County">{evaluation.county_name}</Row>
+          <Row label="County FIPS">{evaluation.county_fips}</Row>
           <Row label="Home type">{homeType}</Row>
-          <Row label="Building code">{legacyCode ? 'Pre-2000 (older code)' : 'Modern (2000 or later)'}</Row>
-          <Row label="County design wind speed">{county.designWindMph} mph</Row>
+          <Row label="Building code">{legacy ? 'Pre-2000 (older code)' : 'Modern (2000 or later)'}</Row>
         </dl>
         <dl className="divide-y divide-border">
           <Row label="Wind code">
-            <CodeStatus status={county.bcat.wind} />
+            <CodeStatus status={evaluation.bcat_wind_resistance} />
           </Row>
           <Row label="Flood code">
-            <CodeStatus status={county.bcat.flood} />
+            <CodeStatus status={evaluation.bcat_flood_resistance} />
           </Row>
-          <Row label="Tornado code">
-            <CodeStatus status={county.bcat.tornado} />
-          </Row>
-          <Row label="Past storm damage">
-            {county.noaaEventCount} events since 2000
-          </Row>
+          <Row label="Code edition">{evaluation.building_code_era}</Row>
+          <Row label="Storm wind used">{Math.round(evaluation.storm_wind_mph)} mph</Row>
         </dl>
       </div>
     </section>
