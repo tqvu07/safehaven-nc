@@ -19,13 +19,36 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
   )
 }
 
-function ResistanceBadge({ status }: { status: string }) {
+function ResistanceBadge({ status, stormWindMph }: { status: string; stormWindMph: number }) {
+  const calm = stormWindMph < 40
   const ok = status === 'Resistant'
+  const alert = stormWindMph >= 40 && !ok
+
+  const label = calm ? 'County Code Standard: Legacy / Baseline' : ok ? 'County Code Standard: Resistant' : 'County Code Standard: Not Resistant'
+  const helper = calm
+    ? 'FEMA rating for extreme storm events, not active danger.'
+    : ok
+      ? 'FEMA rating reflects adequate protection for severe storm conditions.'
+      : 'Structural vulnerability during active storm conditions.'
+
   return (
-    <span className={cn('inline-flex items-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl', ok ? 'text-success' : 'text-destructive')}>
-      <span className={cn('size-2 rounded-full', ok ? 'bg-success' : 'bg-destructive')} aria-hidden="true" />
-      {status}
-    </span>
+    <div className="flex flex-col items-start gap-1.5">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-semibold tracking-tight sm:text-lg',
+          calm ? 'border-border bg-muted/70 text-slate-700' : alert ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-success/20 bg-success/10 text-success',
+        )}
+      >
+        <span className={cn('size-2 rounded-full', calm ? 'bg-slate-500' : alert ? 'bg-amber-500' : 'bg-success')} aria-hidden="true" />
+        {label}
+      </span>
+      <span className="max-w-[22rem] text-[11px] leading-relaxed text-muted-foreground">
+        {helper}
+      </span>
+      <span className="text-[11px] leading-relaxed text-muted-foreground">
+        FEMA BCAT evaluates structural resilience under severe hurricane conditions (74+ mph). Current conditions are {calm ? 'calm.' : 'active.'}
+      </span>
+    </div>
   )
 }
 
@@ -62,7 +85,11 @@ export function Verdict({ evaluation }: { evaluation: ApiEvaluation }) {
           }
           note={county_name}
         />
-        <Stat label="County wind code" value={<ResistanceBadge status={bcat_wind_resistance} />} note={building_code_era} />
+        <Stat
+          label="County wind code"
+          value={<ResistanceBadge status={bcat_wind_resistance} stormWindMph={storm_wind_mph} />}
+          note={building_code_era}
+        />
         <div className="flex flex-col gap-1 px-3 py-3 sm:p-4">
           <dt className="text-xs text-muted-foreground sm:text-sm">Damage risk</dt>
           <dd className={cn('text-xl font-semibold tracking-tight sm:text-2xl', risk.text)}>{risk.label}</dd>
