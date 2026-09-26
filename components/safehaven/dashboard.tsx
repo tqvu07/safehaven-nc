@@ -66,15 +66,15 @@ export function Dashboard() {
   const stale = JSON.stringify(intake) !== JSON.stringify(evaluatedIntake)
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="mx-auto max-w-6xl py-2 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
+      <div className="flex flex-col gap-2 sm:gap-6 lg:flex-row lg:items-start">
         <aside className="lg:sticky lg:top-20 lg:w-80 lg:shrink-0">
           <IntakeForm value={intake} onChange={setIntake} onSubmit={handleSubmit} submitting={submitting} stale={stale} />
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-6" aria-busy={submitting} aria-live="polite">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:gap-6" aria-busy={submitting} aria-live="polite">
           {notice && (
-            <p role="status" className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
+            <p role="status" className="flex items-center gap-2 border-y border-warning/30 bg-warning/5 px-4 py-3 text-sm sm:rounded-lg sm:border">
               <Info className="size-4 shrink-0 text-warning" aria-hidden="true" />
               {notice}
             </p>
@@ -82,7 +82,7 @@ export function Dashboard() {
           <Verdict evaluation={evaluation} />
           <ShelterPanel evaluation={evaluation} selectedId={selectedId} onSelect={setSelectedId} />
           <HomeDetails evaluation={evaluation} />
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="px-4 py-4 text-xs leading-relaxed text-muted-foreground sm:px-0 sm:py-0">
             This is an estimate using sample data for Orange, Durham, and Wake counties. Always follow official
             instructions from ReadyNC and your local emergency management office.
           </p>

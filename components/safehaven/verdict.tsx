@@ -10,9 +10,9 @@ function riskLevel(value: number) {
 
 function Stat({ label, value, note }: { label: string; value: React.ReactNode; note?: string }) {
   return (
-    <div className="flex flex-col gap-1 p-4">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-2xl font-semibold tabular-nums tracking-tight">{value}</dd>
+    <div className="flex flex-col gap-1 px-3 py-3 sm:p-4">
+      <dt className="text-xs text-muted-foreground sm:text-sm">{label}</dt>
+      <dd className="text-xl font-semibold tabular-nums tracking-tight sm:text-2xl">{value}</dd>
       {note && <p className="text-xs text-muted-foreground">{note}</p>}
     </div>
   )
@@ -24,10 +24,10 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
   const Icon = unsafe ? CircleAlert : CircleCheck
 
   return (
-    <section aria-labelledby="verdict-heading" className="overflow-hidden rounded-xl border border-border bg-card">
+    <section aria-labelledby="verdict-heading" className="overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border">
       <div
         role={unsafe ? 'alert' : 'status'}
-        className={cn('flex gap-3 border-l-4 p-5', unsafe ? 'border-destructive bg-destructive/5' : 'border-success bg-success/5')}
+        className={cn('flex gap-3 border-l-4 px-4 py-5 sm:p-5', unsafe ? 'border-destructive bg-destructive/5' : 'border-success bg-success/5')}
       >
         <Icon className={cn('mt-0.5 size-6 shrink-0', unsafe ? 'text-destructive' : 'text-success')} aria-hidden="true" />
         <div>
@@ -63,9 +63,9 @@ export function Verdict({ evaluation }: { evaluation: Evaluation }) {
           }
           note={`Built ${input.yearBuilt}`}
         />
-        <div className="flex flex-col gap-1 p-4">
-          <dt className="text-sm text-muted-foreground">Damage risk</dt>
-          <dd className={cn('text-2xl font-semibold tracking-tight', risk.text)}>{risk.label}</dd>
+        <div className="flex flex-col gap-1 px-3 py-3 sm:p-4">
+          <dt className="text-xs text-muted-foreground sm:text-sm">Damage risk</dt>
+          <dd className={cn('text-xl font-semibold tracking-tight sm:text-2xl', risk.text)}>{risk.label}</dd>
           <div
             className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
             role="meter"

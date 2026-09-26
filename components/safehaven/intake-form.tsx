@@ -58,7 +58,7 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
   const legacy = Number.isFinite(value.yearBuilt) && value.yearBuilt < 2000
 
   return (
-    <section aria-labelledby="intake-heading" className="rounded-xl border border-border bg-card p-5">
+    <section aria-labelledby="intake-heading" className="border-y border-border bg-card px-4 py-5 sm:rounded-xl sm:border sm:p-5">
       <h2 id="intake-heading" className="text-base font-semibold">
         Your home
       </h2>
@@ -117,7 +117,7 @@ export function IntakeForm({ value, onChange, onSubmit, submitting, stale }: Int
           )}
         </div>
 
-        <div className="grid grid-cols-[1fr_5rem] gap-3">
+        <div className="grid grid-cols-[1fr_6rem] gap-3 max-[359px]:grid-cols-1">
           <div className="min-w-0">
             <label htmlFor="structure-type" className={labelClass}>
               Home type

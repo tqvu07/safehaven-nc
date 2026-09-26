@@ -14,9 +14,9 @@ function CodeStatus({ status }: { status: ResistanceStatus }) {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-2.5">
+    <div className="flex flex-col gap-0.5 py-2.5 min-[400px]:flex-row min-[400px]:items-baseline min-[400px]:justify-between min-[400px]:gap-4">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-right text-sm font-medium">{children}</dd>
+      <dd className="text-sm font-medium min-[400px]:text-right">{children}</dd>
     </div>
   )
 }
@@ -26,7 +26,7 @@ export function HomeDetails({ evaluation }: { evaluation: Evaluation }) {
   const homeType = STRUCTURE_TYPES.find((s) => s.id === input.structureType)?.label ?? input.structureType
 
   return (
-    <section aria-labelledby="details-heading" className="rounded-xl border border-border bg-card p-5">
+    <section aria-labelledby="details-heading" className="border-y border-border bg-card px-4 py-5 sm:rounded-xl sm:border sm:p-5">
       <h2 id="details-heading" className="text-base font-semibold">
         How we got this
       </h2>
