@@ -86,6 +86,7 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
             zIndexOffset={selected ? 900 : 0}
             eventHandlers={{
               click: (event) => {
+                event.originalEvent?.preventDefault?.()
                 event.originalEvent?.stopPropagation?.()
                 if (!(status === 'FULL' || occupancy > 90)) onSelect(s.name)
               },
