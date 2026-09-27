@@ -75,6 +75,7 @@ function DirectionsLink({
 
 function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: () => void }) {
   const ratedTo = Number.isFinite(Number(shelter.max_wind_rating_mph)) ? Number(shelter.max_wind_rating_mph) : 0
+  const capacity = Number(shelter.evacuation_capacity ?? shelter.capacity ?? 0)
 
   return (
     <div
@@ -102,7 +103,7 @@ function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: ()
         Rated to: <strong className="font-semibold">{ratedTo} mph</strong>
       </p>
       <p className="mt-1 text-sm tabular-nums text-muted-foreground">
-        {shelter.distance_miles.toFixed(1)} mi away · room for {shelter.capacity.toLocaleString()}
+        {Number(shelter.distance_miles ?? 0).toFixed(1)} mi away · room for {capacity.toLocaleString()}
       </p>
       {amenities(shelter) && <p className="mt-1 text-sm text-muted-foreground">{amenities(shelter)}</p>}
       {(() => {
