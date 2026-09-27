@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useMemo } from 'react'
 import L from 'leaflet'
-import { MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import { HIGH_CAPACITY_THRESHOLD } from '@/lib/safehaven/data'
 import type { ApiShelter } from '@/lib/safehaven/api'
 
@@ -65,7 +65,19 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
         className="sh-tiles"
       />
       <FitBounds user={user} shelters={shelters} />
-      <Marker position={user} icon={homeIcon} zIndexOffset={1000}>
+      <Marker
+        position={user}
+        icon={homeIcon}
+        zIndexOffset={1000}
+        eventHandlers={{
+          click: (e) => {
+            if (e.originalEvent) {
+              e.originalEvent.stopPropagation()
+              e.originalEvent.preventDefault()
+            }
+          },
+        }}
+      >
         <Tooltip direction="top" offset={[0, -14]}>
           Your location
         </Tooltip>
@@ -85,9 +97,11 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
             icon={high ? (selected ? shelterIcon(true, true, markerStatus) : shelterIcon(true, false, markerStatus)) : selected ? shelterIcon(false, true, markerStatus) : shelterIcon(false, false, markerStatus)}
             zIndexOffset={selected ? 900 : 0}
             eventHandlers={{
-              click: (event) => {
-                event.originalEvent?.preventDefault?.()
-                event.originalEvent?.stopPropagation?.()
+              click: (e) => {
+                if (e.originalEvent) {
+                  e.originalEvent.stopPropagation()
+                  e.originalEvent.preventDefault()
+                }
                 if (!(status === 'FULL' || occupancy > 90)) onSelect(s.name)
               },
             }}
@@ -95,6 +109,23 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
             alt={s.name}
             keyboard
           >
+            <Popup>
+              <div onClick={(e) => e.stopPropagation()}>
+                <div className="mb-2 font-semibold text-sm">{s.name}</div>
+                <div className="mb-2 text-xs text-muted-foreground">{s.county} County</div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    window.open(s.navigation_url, '_blank', 'noopener,noreferrer')
+                  }}
+                  className="w-full rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Get Directions
+                </button>
+              </div>
+            </Popup>
             <Tooltip direction="top" offset={[0, -14]}>
               {s.name}
               {status === 'FULL' ? ' · At Capacity' : ''}

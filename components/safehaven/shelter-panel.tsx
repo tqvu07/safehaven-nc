@@ -53,10 +53,8 @@ function DirectionsLink({
   iconOnlyOnMobile?: boolean
 }) {
   return (
-    <a
-      href={shelter.navigation_url}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      type="button"
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
@@ -71,7 +69,7 @@ function DirectionsLink({
       <Navigation className="size-4 sm:size-3.5" aria-hidden="true" />
       <span className={cn(iconOnlyOnMobile && 'sr-only sm:not-sr-only')}>Directions</span>
       <span className="sr-only"> to {shelter.name} (opens Google Maps)</span>
-    </a>
+    </button>
   )
 }
 
