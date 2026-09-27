@@ -57,6 +57,7 @@ function DirectionsLink({
       href={shelter.navigation_url}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
       className={cn(
         'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary font-medium text-primary-foreground transition hover:bg-primary/90',
         compact ? 'h-9 px-3 text-sm sm:h-8' : 'h-9 px-3.5 text-sm',
@@ -81,7 +82,10 @@ function ShelterDetails({ shelter, onClose }: { shelter: ApiShelter; onClose: ()
     >
       <button
         type="button"
-        onClick={onClose}
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+        }}
         className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         aria-label="Close shelter details"
       >
@@ -215,7 +219,10 @@ export function ShelterPanel({ evaluation, userCoords, selectedId, onSelect }: S
                 <span className="w-4 shrink-0 self-start pt-0.5 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
                 <button
                   type="button"
-                  onClick={() => !isDisabled && onSelect(s.name)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!isDisabled) onSelect(s.name)
+                  }}
                   disabled={isDisabled}
                   className={cn('min-w-0 flex-1 text-left', isDisabled && 'cursor-not-allowed opacity-80')}
                 >

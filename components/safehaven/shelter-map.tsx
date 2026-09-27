@@ -84,7 +84,12 @@ export default function ShelterMap({ user, shelters, selectedId, onSelect }: She
             position={[s.lat, s.lon]}
             icon={high ? (selected ? shelterIcon(true, true, markerStatus) : shelterIcon(true, false, markerStatus)) : selected ? shelterIcon(false, true, markerStatus) : shelterIcon(false, false, markerStatus)}
             zIndexOffset={selected ? 900 : 0}
-            eventHandlers={{ click: () => !(status === 'FULL' || occupancy > 90) && onSelect(s.name) }}
+            eventHandlers={{
+              click: (event) => {
+                event.originalEvent?.stopPropagation?.()
+                if (!(status === 'FULL' || occupancy > 90)) onSelect(s.name)
+              },
+            }}
             title={s.name}
             alt={s.name}
             keyboard
